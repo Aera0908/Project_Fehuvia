@@ -1,0 +1,21 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@morph-l2/sdk": "^0.3.30",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "ethers": "^5.8.0",
+    "express": "^5.2.1",
+    "openai": "^6.38.0"
+  }
+}

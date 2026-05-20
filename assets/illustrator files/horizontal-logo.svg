@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 200">
+  <!-- Generator: Adobe Illustrator 30.4.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 226)  -->
+  <defs>
+    <style>
+      .st0 {
+        clip-path: url(#clippath-7);
+      }
+
+      .st1 {
+        fill: none;
+      }
+
+      .st2 {
+        font-family: Montserrat-Medium, Montserrat;
+        font-size: 24px;
+        font-weight: 500;
+      }
+
+      .st3 {
+        font-family: Montserrat-Bold, Montserrat;
+        font-size: 84px;
+        font-weight: 700;
+      }
+
+      .st4 {
+        fill: url(#linear-gradient);
+      }
+
+      .st5 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="st1" x="40.88" y="20.5" width="160" height="160"/>
+    </clipPath>
+    <clipPath id="clippath-7">
+      <polygon class="st1" points="143.22 79.45 153.79 88.84 142.3 98.62 126.53 112.04 110.75 125.47 110.75 153.74 94.98 167.16 94.98 57.01 106.73 47.01 110.75 43.59 110.75 71.99 123.05 61.52 126.53 58.56 142.3 45.14 145.14 42.72 156.17 52.52 142.3 64.33 134.09 71.32 126.53 77.75 110.75 91.18 110.75 107.08 126.53 93.65 142.3 80.23 143.22 79.45"/>
+    </clipPath>
+    <linearGradient id="linear-gradient" x1="1.37" y1=".47" x2="2.37" y2=".47" gradientTransform="translate(365.5154 44.509) scale(-128.3382 128.3382)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dfc47e"/>
+      <stop offset="1" stop-color="#937534"/>
+    </linearGradient>
+  </defs>
+  <g class="st5">
+    <g class="st0">
+      <rect class="st4" x="60.93" y="69.04" width="129.3" height="71.8" transform="translate(10.09 220.89) rotate(-85)"/>
+    </g>
+  </g>
+  <text class="st3" transform="translate(167.52 117.26)"><tspan x="0" y="0">Fehuvia</tspan></text>
+  <text class="st2" transform="translate(174.89 151.1)"><tspan x="0" y="0">Wealth in motion</tspan></text>
+</svg>
