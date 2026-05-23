@@ -1,0 +1,7 @@
+# Ignore sample-code directory
+sample-code/
+
+# Node modules and build output
+**/node_modules/
+**/dist/
+*.log

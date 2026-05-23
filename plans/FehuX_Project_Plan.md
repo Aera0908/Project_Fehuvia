@@ -17,18 +17,18 @@ When an invoice is approved, our smart contracts execute the instant transfer of
 * **Smart Contracts:** Solidity (Deployed on Morph Testnet).
 * **Frontend Dashboard:** React + Tailwind CSS.
 * **Backend API:** Node.js / Express.
-* **The AI Co-Pilot:** OpenAI API (GPT-4o) for JSON cashflow predictions.
+* **The AI Co-Pilot:** OpenAI API (GPT-4o) with a RAG system for context-aware JSON cashflow predictions.
 * **Web3 Integration:** Ethers.js and Wagmi/RainbowKit.
 * **Tokens:** Mock ERC-20 stablecoin (e.g., test USDC) on Morph.
 
 ## The Architecture & Data Flow (Diagram Required for Bonus Points)
 *To be drafted in draw.io or Excalidraw:*
-1. **Node.js Backend** stores B2B invoice data -> Sends to **OpenAI API**.
-2. **OpenAI API** returns predictive 30-day JSON cashflow & action tags ("Safe to Pay").
+1. **Node.js Backend** stores B2B invoice data -> retrieves relevant context through **RAG** -> sends the prompt to **OpenAI API**.
+2. **OpenAI API** returns predictive 30-day JSON cashflow & action tags ("Safe to Pay") using retrieved invoice/context data.
 3. **React Frontend** visualizes data on the Black/Gold dashboard.
 4. User clicks "Settle" -> **Web3 Wallet (Ethers.js)** signs transaction.
 5. **Morph Testnet Smart Contract** instantly settles ERC-20 stablecoins to supplier.
-6. Contract emits `PaymentSettled` -> Backend updates AI model.
+6. Contract emits `PaymentSettled` -> Backend updates the invoice history and retrieval index for the RAG layer.
 
 ## The Hackathon Sprint Plan (May 18 – May 29)
 
@@ -38,7 +38,7 @@ When an invoice is approved, our smart contracts execute the instant transfer of
 * *Community Requirement:* **Build Diary Post 1 on X:** "Just deployed our B2B settlement contracts on the @MorphNetwork testnet! Fixing SME cashflow in the PH one block at a time. #MorphBuildSprint #MorphBuildPH"
 
 **Days 3-4: The Interface (Backend & React)**
-* Build the Node.js API routes and OpenAI system prompt.
+* Build the Node.js API routes, RAG retrieval pipeline, and OpenAI system prompt.
 * Build the React UI (Black and Gold theme). 
 * *Community Requirement:* **Build Diary Post 2 on X:** "UI is coming together! Fehuvia isn't just an accounting app; our AI Co-Pilot acts as an automated CFO. Dropping a sneak peek of the dashboard. #MorphBuildSprint #MorphBuildPH"
 

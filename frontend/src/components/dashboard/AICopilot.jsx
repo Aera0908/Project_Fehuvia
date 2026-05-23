@@ -1,0 +1,129 @@
+import React from 'react';
+import { Sparkles, TrendingUp, AlertTriangle } from 'lucide-react';
+
+export function AICopilot() {
+  const insights = [
+    {
+      icon: TrendingUp,
+      type: 'Opportunity',
+      message: 'Cash position optimal for early payment discount with Acme Corp. Consider settling INV-001 today to save $2,500.',
+      priority: 'high'
+    },
+    {
+      icon: AlertTriangle,
+      type: 'Alert',
+      message: 'Manufacturing Co has historically taken 45+ days to process refunds. Recommend delaying INV-004 by 3 days.',
+      priority: 'medium'
+    },
+    {
+      icon: Sparkles,
+      type: 'Insight',
+      message: 'Your payment velocity is 24% faster than industry average. Maintain current optimization strategy.',
+      priority: 'low'
+    }
+  ];
+
+  return (
+    <div className="relative bg-[#0d0d0f] border border-[#2C2C2C] rounded-xl overflow-hidden font-outfit h-full"
+         style={{
+           boxShadow: `
+             0 8px 24px rgba(0, 0, 0, 0.08),
+             0 2px 8px rgba(0, 0, 0, 0.06),
+             inset 0 1px 1px rgba(255, 255, 255, 0.03),
+             inset 0 -1px 1px rgba(0, 0, 0, 0.5)
+           `,
+           background: 'linear-gradient(145deg, #0d0d0d 0%, #0a0a0a 50%, #080808 100%)'
+         }}>
+      <div className="p-6 flex flex-col justify-between h-full">
+        
+        {/* Header section */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+               style={{
+                 background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
+                 boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.3)'
+               }}>
+            <Sparkles className="w-6 h-6 text-[#0a0a0a]" />
+          </div>
+          <div>
+            <h3 className="text-lg text-white font-semibold"
+                style={{
+                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3)'
+                }}>
+              AI Financial Copilot
+            </h3>
+            <p className="text-xs text-[#a1a1a1]">Real-time strategic recommendations</p>
+          </div>
+        </div>
+
+        {/* Insight List */}
+        <div className="space-y-4 flex-1">
+          {insights.map((insight, index) => {
+            const Icon = insight.icon;
+            const priorityColors = {
+              high: { bg: 'rgba(212, 175, 55, 0.08)', border: 'rgba(212, 175, 55, 0.4)', icon: '#D4AF37' },
+              medium: { bg: 'rgba(251, 146, 60, 0.08)', border: 'rgba(251, 146, 60, 0.3)', icon: '#fb923c' },
+              low: { bg: 'rgba(74, 222, 128, 0.08)', border: 'rgba(74, 222, 128, 0.3)', icon: '#4ade80' }
+            };
+            const colors = priorityColors[insight.priority];
+
+            return (
+              <div key={index}
+                   className="p-4 rounded-lg bg-[#161618] border border-[#2C2C2C]"
+                   style={{
+                     boxShadow: `
+                       0 4px 12px rgba(0, 0, 0, 0.06),
+                       inset 0 1px 1px rgba(255, 255, 255, 0.02),
+                       inset 0 -1px 1px rgba(0, 0, 0, 0.4)
+                     `
+                   }}>
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border"
+                       style={{
+                         backgroundColor: colors.bg,
+                         borderColor: colors.border,
+                         boxShadow: `0 0 8px ${colors.icon}20`
+                       }}>
+                    <Icon className="w-4 h-4" style={{ color: colors.icon }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1"
+                       style={{
+                         color: colors.icon,
+                         textShadow: `0 0 4px ${colors.icon}30`
+                       }}>
+                      {insight.type}
+                    </p>
+                    <p className="text-xs text-white/80 leading-relaxed font-light">
+                      {insight.message}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* View Details Button */}
+        <button className="w-full mt-5 px-4 py-3.5 rounded-lg text-xs uppercase font-bold tracking-wider transition-all cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
+                  color: '#0a0a0a',
+                  boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2)',
+                  textShadow: '0 1px 1px rgba(255, 255, 255, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(212, 175, 55, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2)';
+                }}>
+          View All Recommendations
+        </button>
+      </div>
+    </div>
+  );
+}
