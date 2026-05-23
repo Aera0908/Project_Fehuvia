@@ -149,9 +149,13 @@ export default function Product() {
                 <div className="plate-black-metallic shape-asymmetric-3 p-4 border border-white/5 relative">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-white uppercase tracking-wider">30-Day AI Cashflow Prediction</span>
-                    <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[9px] sm:text-[10px] uppercase tracking-wider px-2 py-0.5 rounded">
-                      Forecast Live
-                    </span>
+                    <div className="flex items-center gap-1.5 text-emerald-400 text-[9px] sm:text-[10px] uppercase tracking-wider font-semibold">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      <span>Forecast Live</span>
+                    </div>
                   </div>
 
                   <div style={{ width: '100%', height: '165px' }}>
@@ -178,56 +182,58 @@ export default function Product() {
                   </div>
                 </div>
 
-                {/* Compact Invoice ledger table - Enlarged labels, cell text, and buttons */}
-                <div className="plate-black-metallic shape-asymmetric-3 p-4 overflow-x-auto border border-white/5">
-                  <span className="text-xs font-bold text-white uppercase tracking-wider block mb-2.5">Pending Obligations ledger</span>
-                  
-                  <table className="w-full text-left text-xs sm:text-sm">
-                    <thead>
-                      <tr className="border-b border-[#2C2C2C] text-[#6a6a6a] font-bold text-[11px] sm:text-xs">
-                        <th className="py-1.5 px-2 uppercase">Invoice ID</th>
-                        <th className="py-1.5 px-2 uppercase">Supplier</th>
-                        <th className="py-1.5 px-2 uppercase">Amount</th>
-                        <th className="py-1.5 px-2 uppercase">AI Action</th>
-                        <th className="py-1.5 px-2 uppercase text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {invoices.map((inv) => (
-                        <tr key={inv.id} className="border-b border-[#1c1c1f] hover:bg-white/[0.01] transition-colors">
-                          <td className="py-2.5 px-2 font-mono text-white/70 text-xs">{inv.id}</td>
-                          <td className="py-2.5 px-2 font-bold text-white text-xs sm:text-sm">{inv.supplier}</td>
-                          <td className="py-2.5 px-2 font-extrabold text-white text-sm">${inv.amount.toLocaleString()}</td>
-                          <td className="py-2.5 px-2">
-                            {inv.settled ? (
-                              <span className="text-[10px] sm:text-xs text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                <span>Settled T+0</span>
-                              </span>
-                            ) : (
-                              <span className="bg-[#1a3d1a]/80 text-[#4ade80] border border-[#4ade80]/20 px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-bold uppercase tracking-wider inline-block">
-                                Safe to Pay
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-2 text-right">
-                            {inv.settled ? (
-                              <span className="text-[#4ade80] font-bold uppercase tracking-wider text-[10px]">Cleared</span>
-                            ) : inv.loading ? (
-                              <span className="text-gold-metallic font-bold uppercase tracking-wider text-[10px] animate-pulse">Settling...</span>
-                            ) : (
-                              <button
-                                onClick={() => handleSettle(inv.id)}
-                                className="px-3.5 py-1.5 rounded bg-gold-metallic text-black font-bold uppercase tracking-wider text-[10px] cursor-pointer hover:scale-[1.02] active:scale-95 transition-all"
-                              >
-                                Settle via Morph
-                              </button>
-                            )}
-                          </td>
+                {/* Compact Invoice ledger table - Shape-masked wrapper to prevent scrollbar clip */}
+                <div className="plate-black-metallic shape-asymmetric-3 border border-white/5 overflow-hidden">
+                  <div className="p-4 pb-3 overflow-x-auto">
+                    <span className="text-[10px] sm:text-xs font-bold text-white uppercase tracking-wider block mb-2">Pending Obligations ledger</span>
+                    
+                    <table className="w-full text-left text-[11px] sm:text-xs">
+                      <thead>
+                        <tr className="border-b border-[#2C2C2C] text-[#6a6a6a] font-bold text-[9px] sm:text-[10px]">
+                          <th className="py-1.5 px-1.5 sm:px-2 uppercase">Invoice ID</th>
+                          <th className="py-1.5 px-1.5 sm:px-2 uppercase">Supplier</th>
+                          <th className="py-1.5 px-1.5 sm:px-2 uppercase">Amount</th>
+                          <th className="py-1.5 px-1.5 sm:px-2 uppercase">AI Action</th>
+                          <th className="py-1.5 px-1.5 sm:px-2 uppercase text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {invoices.map((inv) => (
+                          <tr key={inv.id} className="border-b border-[#1c1c1f] hover:bg-white/[0.01] transition-colors">
+                            <td className="py-2 px-1.5 sm:px-2 font-mono text-white/70 text-[10px] sm:text-xs">{inv.id}</td>
+                            <td className="py-2 px-1.5 sm:px-2 font-bold text-white text-[11px] sm:text-xs">{inv.supplier}</td>
+                            <td className="py-2 px-1.5 sm:px-2 font-extrabold text-white text-xs sm:text-sm">${inv.amount.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 sm:px-2">
+                              {inv.settled ? (
+                                <span className="text-[9px] sm:text-xs text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3 shrink-0" />
+                                  <span>Settled T+0</span>
+                                </span>
+                              ) : (
+                                <span className="bg-[#1a3d1a]/80 text-[#4ade80] border border-[#4ade80]/20 px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-wider inline-block">
+                                  Safe to Pay
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-1.5 sm:px-2 text-right">
+                              {inv.settled ? (
+                                <span className="text-[#4ade80] font-bold uppercase tracking-wider text-[9px]">Cleared</span>
+                              ) : inv.loading ? (
+                                <span className="text-gold-metallic font-bold uppercase tracking-wider text-[9px] animate-pulse">Settling...</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleSettle(inv.id)}
+                                  className="px-2.5 py-1 rounded bg-gold-metallic text-black font-bold uppercase tracking-wider text-[9px] sm:text-[10px] cursor-pointer hover:scale-[1.02] active:scale-95 transition-all"
+                                >
+                                  Settle via Morph
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
               </div>

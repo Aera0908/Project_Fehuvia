@@ -7,10 +7,13 @@ import Features from './components/Features';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import DashboardLayout from './components/dashboard/DashboardLayout';
+import ContentReader from './components/ContentReader';
+import ArchitectureView from './components/ArchitectureView';
 
 function App() {
-  // Navigation View Coordinator: 'landing' or 'dashboard'
+  // Navigation View Coordinator: 'landing', 'dashboard', 'reader', or 'architecture'
   const [view, setView] = useState('landing');
+  const [activeDoc, setActiveDoc] = useState('core-concept');
   
   const [modalType, setModalType] = useState('none');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,6 +64,27 @@ function App() {
     return <DashboardLayout setView={setView} />;
   }
 
+  // If in content reader view, render the full-screen interactive document sheet
+  if (view === 'reader') {
+    return (
+      <ContentReader
+        activePage={activeDoc}
+        onClose={() => setView('landing')}
+        setView={setView}
+      />
+    );
+  }
+
+  // If in architecture view, render the interactive structural topology diagram
+  if (view === 'architecture') {
+    return (
+      <ArchitectureView
+        onClose={() => setView('landing')}
+        setView={setView}
+      />
+    );
+  }
+
   // Otherwise render the stark, premium matte-black and gold landing page
   return (
     <div className="min-h-screen text-white font-sans bg-black flex flex-col relative overflow-x-hidden snap-y snap-mandatory select-none">
@@ -71,6 +95,7 @@ function App() {
         isMobileMenuOpen={isMobileMenuOpen}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
         setModalType={setModalType}
+        setView={setView}
       />
 
       {/* 2. Hero Presentation Section */}
@@ -95,7 +120,14 @@ function App() {
       />
 
       {/* 6. Site Map Footer */}
-      <Footer />
+      <Footer onPageSelect={(pageKey) => {
+        if (pageKey === 'architecture') {
+          setView('architecture');
+        } else {
+          setActiveDoc(pageKey);
+          setView('reader');
+        }
+      }} />
 
       {/* 7. Frosted Glass Authentication Modal Overlay */}
       <AuthModal
