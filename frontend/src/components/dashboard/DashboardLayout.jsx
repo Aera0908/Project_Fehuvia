@@ -348,10 +348,10 @@ export default function DashboardLayout({ setView }) {
         )}
 
         {/* Workspace Header — collapses on scroll via CSS only (no mount/unmount) */}
-        <header className={`px-8 sticky top-0 z-10 transition-all duration-300 border-b ${
+        <header className={`px-4 sm:px-8 sticky top-0 z-10 transition-all duration-300 border-b ${
           isHeaderScrolled 
-            ? 'py-2.5 bg-[#0a0a0b]/40 backdrop-blur-2xl border-[#e4c37a]/15' 
-            : 'py-5 bg-[#0a0a0b]/80 border-[#2C2C2C] backdrop-blur-md'
+            ? 'py-2 bg-[#0a0a0b]/40 backdrop-blur-2xl border-[#e4c37a]/15' 
+            : 'py-4 sm:py-5 bg-[#0a0a0b]/80 border-[#2C2C2C] backdrop-blur-md'
         }`}
                 style={{
                   boxShadow: isHeaderScrolled ? '0 4px 30px rgba(0, 0, 0, 0.4)' : '0 1px 0 rgba(255, 255, 255, 0.01)',
@@ -359,23 +359,23 @@ export default function DashboardLayout({ setView }) {
           <div className="flex items-center justify-between gap-4">
             
             {/* Header values */}
-            <div className="flex items-center gap-6 flex-wrap">
+            <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
               
               {/* Portfolio Value */}
               <div className="cursor-pointer" onClick={() => setCurrentPage('Dashboard')}>
                 {/* Label row — collapses via max-height + opacity */}
                 <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
                   <span className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider whitespace-nowrap">Portfolio Value</span>
-                  <HelpCircle className="w-3.5 h-3.5 text-[#6a6a6a] cursor-help shrink-0" />
+                  <HelpCircle className="w-3.5 h-3.5 text-[#6a6a6a] cursor-help shrink-0 hidden xs:inline" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   {/* Compact label visible only when collapsed */}
                   <span className={`text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Portfolio</span>
-                  <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-2xl'}`}>
+                  <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl'}`}>
                     ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   {/* Growth badge — collapses */}
-                  <span className={`text-[10px] font-bold tracking-wide text-gold-metallic ml-1 whitespace-nowrap transition-all duration-300 ${isHeaderScrolled ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
+                  <span className={`text-[10px] font-bold tracking-wide text-gold-metallic ml-1 whitespace-nowrap hidden xs:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
                     +$342,158 (12.5%)
                   </span>
                 </div>
@@ -387,11 +387,11 @@ export default function DashboardLayout({ setView }) {
               <div className="cursor-pointer" onClick={() => setCurrentPage('Dashboard')}>
                 <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
                   <span className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider whitespace-nowrap">Available Balance</span>
-                  <HelpCircle className="w-3.5 h-3.5 text-[#6a6a6a] cursor-help shrink-0" />
+                  <HelpCircle className="w-3.5 h-3.5 text-[#6a6a6a] cursor-help shrink-0 hidden xs:inline" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className={`text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Balance</span>
-                  <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-2xl'}`}>
+                  <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl'}`}>
                     ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -418,14 +418,27 @@ export default function DashboardLayout({ setView }) {
             </div>
 
             {/* Profile block */}
-            <div className="flex items-center gap-3 shrink-0 relative" ref={dropdownRef}>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative" ref={dropdownRef}>
+              
+              {/* Help Button trigger */}
+              <button
+                onClick={() => setCurrentPage('Help')}
+                className={`hover:bg-[#161618]/60 rounded-xl border border-transparent hover:border-[#2C2C2C] transition-all relative cursor-pointer ${
+                  currentPage === 'Help' ? 'bg-[#161618] border-[#2C2C2C]' : ''
+                } ${isHeaderScrolled ? 'p-1.5' : 'p-2 sm:p-2.5'}`}
+                title="Help Center"
+              >
+                <HelpCircle className={`text-[#a1a1a1] transition-all duration-300 ${isHeaderScrolled ? 'w-4 h-4' : 'w-5 h-5'}`} />
+              </button>
+
+              {/* Bell notifications Button */}
               <button
                 onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
                 className={`hover:bg-[#161618] rounded-xl border border-transparent hover:border-[#2C2C2C] transition-all relative cursor-pointer ${
                   showNotificationsDropdown 
                     ? 'bg-[#161618] border-[#2C2C2C]' 
                     : ''
-                } ${isHeaderScrolled ? 'p-1.5' : 'p-2.5'}`}
+                } ${isHeaderScrolled ? 'p-1.5' : 'p-2 sm:p-2.5'}`}
               >
                 <Bell className={`text-[#a1a1a1] transition-all duration-300 ${isHeaderScrolled ? 'w-4 h-4' : 'w-5 h-5'}`} />
                 {unreadCount > 0 && (
@@ -525,14 +538,14 @@ export default function DashboardLayout({ setView }) {
               
               <div
                 onClick={() => setCurrentPage('Profile')}
-                className={`flex items-center gap-2.5 hover:bg-[#161618] rounded-xl border border-transparent hover:border-[#2C2C2C] transition-all cursor-pointer ${isHeaderScrolled ? 'px-2.5 py-1.5' : 'px-4 py-2'}`}
+                className={`flex items-center gap-2 hover:bg-[#161618] rounded-xl border border-transparent hover:border-[#2C2C2C] transition-all cursor-pointer ${isHeaderScrolled ? 'px-2 py-1.5' : 'px-3 py-2'}`}
               >
-                <div className={`rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${isHeaderScrolled ? 'w-7 h-7' : 'w-9 h-9'}`}
+                <div className={`rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${isHeaderScrolled ? 'w-7 h-7' : 'w-8 h-8 sm:w-9 h-9'}`}
                      style={{
                        background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
                        boxShadow: '0 2px 8px rgba(212, 175, 55, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.3)'
                      }}>
-                  <User className={`text-[#0a0a0a] transition-all duration-300 ${isHeaderScrolled ? 'w-3.5 h-3.5' : 'w-5 h-5'}`} />
+                  <User className={`text-[#0a0a0a] transition-all duration-300 ${isHeaderScrolled ? 'w-3.5 h-3.5' : 'w-4 h-4 sm:w-5 h-5'}`} />
                 </div>
                 {/* Name — collapses via CSS */}
                 <div className={`text-left hidden sm:block overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-w-0 opacity-0' : 'max-w-[160px] opacity-100'}`}>
@@ -546,63 +559,63 @@ export default function DashboardLayout({ setView }) {
         </header>
 
         {/* Metrics sub-bar — collapses via CSS height, always in DOM */}
-        <div className={`px-8 border-b border-[#2C2C2C] overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 py-0 opacity-0 border-transparent' : 'max-h-24 py-5 opacity-100'}`}
+        <div className={`px-4 sm:px-8 border-b border-[#2C2C2C] overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 py-0 opacity-0 border-transparent' : 'max-h-36 sm:max-h-24 py-4 sm:py-5 opacity-100'}`}
              style={{
                boxShadow: isHeaderScrolled ? 'none' : '0 1px 0 rgba(255, 255, 255, 0.01)'
              }}>
-          <div className="flex items-center gap-8 flex-wrap">
+          <div className="grid grid-cols-3 gap-3 md:flex md:items-center md:gap-8">
             
             {/* Stat: Pending payables */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentPage('Invoices')}>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C]"
+            <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 cursor-pointer text-center sm:text-left" onClick={() => setCurrentPage('Invoices')}>
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C] shrink-0"
                    style={{
                      background: 'linear-gradient(145deg, #101012 0%, #070709 100%)',
                      boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02), inset 0 -1px 1px rgba(0, 0, 0, 0.4)'
                    }}>
-                <FileText className="w-5 h-5 text-[#D4AF37]" />
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]" />
               </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider">Pending Invoices</p>
-                <p className="text-base font-bold text-white leading-tight">
-                  {pendingCount} <span className="text-xs text-[#6a6a6a] font-normal">(${pendingTotal.toLocaleString()})</span>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">Pending</p>
+                <p className="text-xs sm:text-base font-bold text-white leading-tight truncate">
+                  {pendingCount} <span className="text-[9px] sm:text-xs text-[#6a6a6a] font-normal hidden xs:inline">(${pendingTotal.toLocaleString()})</span>
                 </p>
               </div>
             </div>
 
-            <div className="h-6 w-px bg-[#2C2C2C]"></div>
+            <div className="h-6 w-px bg-[#2C2C2C] hidden md:block"></div>
 
             {/* Stat: AI status */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentPage('Analytics')}>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C]"
+            <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 cursor-pointer text-center sm:text-left" onClick={() => setCurrentPage('Analytics')}>
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C] shrink-0"
                    style={{
                      background: 'linear-gradient(145deg, #101012 0%, #070709 100%)',
                      boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02), inset 0 -1px 1px rgba(0, 0, 0, 0.4)'
                    }}>
-                <TrendingUp className="w-5 h-5 text-[#4ade80]" />
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ade80]" />
               </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider">AI Optimization</p>
-                <p className="text-base font-bold text-white leading-tight">
-                  94% <span className="text-xs text-[#4ade80] font-semibold uppercase tracking-wider">Active</span>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">AI Opt.</p>
+                <p className="text-xs sm:text-base font-bold text-white leading-tight truncate">
+                  94% <span className="text-[9px] sm:text-xs text-[#4ade80] font-semibold uppercase tracking-wider hidden xs:inline">Active</span>
                 </p>
               </div>
             </div>
 
-            <div className="h-6 w-px bg-[#2C2C2C]"></div>
+            <div className="h-6 w-px bg-[#2C2C2C] hidden md:block"></div>
 
             {/* Stat: settlement latency */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentPage('Cash Flow')}>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C]"
+            <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 cursor-pointer text-center sm:text-left" onClick={() => setCurrentPage('Cash Flow')}>
+              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C] shrink-0"
                    style={{
                      background: 'linear-gradient(145deg, #101012 0%, #070709 100%)',
                      boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02), inset 0 -1px 1px rgba(0, 0, 0, 0.4)'
                    }}>
-                <Clock className="w-5 h-5 text-[#D4AF37]" />
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]" />
               </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider">Avg. Settlement</p>
-                <p className="text-base font-bold text-white leading-tight">
-                  1.2d <span className="text-xs text-gold-metallic font-semibold">-24%</span>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">Settled</p>
+                <p className="text-xs sm:text-base font-bold text-white leading-tight truncate">
+                  1.2d <span className="text-[9px] sm:text-xs text-gold-metallic font-semibold hidden xs:inline">-24%</span>
                 </p>
               </div>
             </div>
@@ -611,7 +624,7 @@ export default function DashboardLayout({ setView }) {
         </div>
 
         {/* Workspace Panels Grid */}
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-8 pb-24 sm:pb-8 space-y-8">
           
           {currentPage === 'Dashboard' && (
             <>

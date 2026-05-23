@@ -56,7 +56,7 @@ export function ProfileView() {
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
                   <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Morph Testnet Connected</span>
                 </div>
-                <p className="text-sm font-mono text-white/80 select-all">0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e</p>
+                <p className="text-xs sm:text-sm font-mono text-white/80 select-all break-all leading-relaxed">0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e</p>
                 <div className="flex items-center gap-4 mt-2">
                   <span className="text-xs text-white/40">Network: <strong className="text-white/60">Morph L2</strong></span>
                   <span className="text-xs text-white/40">Gas Token: <strong className="text-white/60">ETH</strong></span>

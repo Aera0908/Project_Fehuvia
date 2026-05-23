@@ -30,23 +30,23 @@ export function CashflowPrediction() {
          }}>
       
       {/* Chart Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h2 className="text-xl text-white font-semibold mb-1"
+          <h2 className="text-lg sm:text-xl text-white font-semibold mb-1"
               style={{
                 textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3)'
               }}>
             30-Day AI Cashflow Prediction
           </h2>
-          <p className="text-sm text-[#a1a1a1]">AI-powered forecasting with 94% accuracy</p>
+          <p className="text-xs sm:text-sm text-[#a1a1a1]">AI-powered forecasting with 94% accuracy</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg"
+        <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg self-start sm:self-auto"
              style={{
                background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
                boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.3)'
              }}>
           <TrendingUp className="w-4 h-4 text-[#0a0a0a]" />
-          <span className="text-sm text-[#0a0a0a] font-semibold">+23.8%</span>
+          <span className="text-xs sm:text-sm text-[#0a0a0a] font-semibold">+23.8%</span>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ export function CashflowPrediction() {
       </div>
 
       {/* Cashflow Summary Stats */}
-      <div className="mt-6 grid grid-cols-3 gap-4">
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         
         <div className="bg-[#161618] border border-[#2C2C2C] rounded-lg p-4"
              style={{
@@ -110,8 +110,8 @@ export function CashflowPrediction() {
                  inset 0 -1px 1px rgba(0, 0, 0, 0.4)
                `
              }}>
-          <p className="text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Projected End Balance</p>
-          <p className="text-lg text-white font-bold"
+          <p className="text-[10px] sm:text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Projected End Balance</p>
+          <p className="text-base sm:text-lg text-white font-bold"
              style={{
                textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8), -0.5px -0.5px 1px rgba(255, 255, 255, 0.1)'
              }}>
@@ -127,8 +127,8 @@ export function CashflowPrediction() {
                  inset 0 -1px 1px rgba(0, 0, 0, 0.4)
                `
              }}>
-          <p className="text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Expected Inflow</p>
-          <p className="text-lg font-bold"
+          <p className="text-[10px] sm:text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Expected Inflow</p>
+          <p className="text-base sm:text-lg font-bold"
              style={{
                background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
                WebkitBackgroundClip: 'text',
@@ -148,8 +148,8 @@ export function CashflowPrediction() {
                  inset 0 -1px 1px rgba(0, 0, 0, 0.4)
                `
              }}>
-          <p className="text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Expected Outflow</p>
-          <p className="text-lg text-white font-bold"
+          <p className="text-[10px] sm:text-xs text-[#a1a1a1] mb-1 font-medium uppercase tracking-wider">Expected Outflow</p>
+          <p className="text-base sm:text-lg text-white font-bold"
              style={{
                textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8), -0.5px -0.5px 1px rgba(255, 255, 255, 0.1)'
              }}>

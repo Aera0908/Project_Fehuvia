@@ -70,7 +70,7 @@ export default function Hero({ heroRef, setModalType, setView }) {
           </div>
 
           {/* Premium Dual Typography Title */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-normal leading-[1.1] tracking-tight text-left">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-normal leading-[1.1] tracking-tight text-center md:text-left">
             <span className="font-cormorant text-5xl sm:text-6xl lg:text-7xl font-light italic block text-silver-metallic mb-1">
               Predictive Cashflow.
             </span>

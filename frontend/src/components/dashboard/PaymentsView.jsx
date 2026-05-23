@@ -51,8 +51,8 @@ export function PaymentsView({ payments }) {
         ))}
       </div>
 
-      {/* Payments Ledger Table */}
-      <div className="plate-black-metallic shape-asymmetric-1 p-6 overflow-x-auto border border-[#2C2C2C]">
+      {/* Desktop Ledger Table (visible on md+) */}
+      <div className="hidden md:block plate-black-metallic shape-asymmetric-1 p-6 overflow-x-auto border border-[#2C2C2C]">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-[#2C2C2C] text-[#6a6a6a] text-xs font-bold uppercase tracking-wider">
@@ -111,6 +111,74 @@ export function PaymentsView({ payments }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card List (visible on md-) */}
+      <div className="block md:hidden space-y-4">
+        {payments.length === 0 ? (
+          <div className="py-12 px-4 text-center text-sm text-white/30 font-light border border-dashed border-[#2C2C2C] rounded-xl bg-[#0d0d0f]/50">
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <Wallet className="w-8 h-8 text-[#6a6a6a] animate-pulse" />
+              <span>No settled payments recorded on-chain yet.</span>
+            </div>
+          </div>
+        ) : (
+          [...payments].reverse().map((payment, index) => (
+            <div
+              key={index}
+              className="p-4 rounded-xl border border-[#2C2C2C] bg-[#0c0c0e] flex flex-col gap-3"
+              style={{
+                boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02)'
+              }}
+            >
+              {/* Top Row: Timestamp & Status badge */}
+              <div className="flex items-center justify-between gap-2 border-b border-[#1c1c1f] pb-2">
+                <span className="text-[10px] text-[#a1a1a1]">{payment.timestamp}</span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border bg-emerald-950/20 text-emerald-400 border-emerald-500/20 text-[9px] font-bold uppercase tracking-wider">
+                    <CheckCircle className="w-2.5 h-2.5" />
+                    <span>Success</span>
+                  </span>
+                  <a
+                    href={`https://explorer.morphl2.io/tx/${payment.txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#6a6a6a] hover:text-[#e4c37a] transition-colors p-1"
+                    title="View on Morph Explorer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Middle Section: Recipient Supplier + Amount */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Recipient / Supplier</span>
+                  <span className="text-sm font-bold text-white">{payment.supplier}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block font-light">Settled Amount</span>
+                  <span className="text-sm font-black text-emerald-400">${payment.amount.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Bottom Section: Destination Wallet + Gas fee */}
+              <div className="flex items-center justify-between gap-4 pt-2 border-t border-[#1c1c1f] text-xs flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[8px] uppercase tracking-wider text-[#6a6a6a] block">Destination Wallet</span>
+                  <p className="text-[10px] font-mono text-white/50 truncate max-w-[200px]" title={payment.destination}>
+                    {payment.destination}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-[8px] uppercase tracking-wider text-[#6a6a6a] block">L2 Gas Fee</span>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold">{payment.fee}</span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
     </div>
