@@ -13,7 +13,7 @@ async function main() {
   // 1. Deploy MockUSDC
   console.log("Deploying MockUSDC...");
   const MockUSDC = await ethers.getContractFactory("MockUSDC");
-  const mockUSDC = await MockUSDC.deploy();
+  const mockUSDC = await MockUSDC.deploy({ gasPrice: ethers.parseUnits("5", "gwei") });
   await mockUSDC.waitForDeployment();
   const mockUSDCAddress = await mockUSDC.getAddress();
   console.log(`MockUSDC successfully deployed to: ${mockUSDCAddress}`);
@@ -21,7 +21,7 @@ async function main() {
   // 2. Deploy B2BSettlement passing MockUSDC address
   console.log("Deploying B2BSettlement...");
   const B2BSettlement = await ethers.getContractFactory("B2BSettlement");
-  const b2bSettlement = await B2BSettlement.deploy(mockUSDCAddress);
+  const b2bSettlement = await B2BSettlement.deploy(mockUSDCAddress, { gasPrice: ethers.parseUnits("5", "gwei") });
   await b2bSettlement.waitForDeployment();
   const b2bSettlementAddress = await b2bSettlement.getAddress();
   console.log(`B2BSettlement successfully deployed to: ${b2bSettlementAddress}`);

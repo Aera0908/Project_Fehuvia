@@ -11,7 +11,7 @@ export default defineConfig({
       type: "http",
       url: process.env.MORPH_TESTNET_RPC || "https://rpc-hoodi.morph.network",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 2818
+      chainId: 2910
     },
     localhost: {
       type: "http",

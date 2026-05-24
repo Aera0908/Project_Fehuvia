@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Outfit:wght@200;300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Montserrat:wght@300;400;500;600;700&family=Outfit:wght@200;300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -30,6 +30,10 @@ body {
 
 .font-cormorant {
   font-family: 'Cormorant Garamond', serif;
+}
+
+.font-montserrat {
+  font-family: 'Montserrat', sans-serif;
 }
 
 /* Elite Gold Metallic Text Gradients */
@@ -173,8 +177,35 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(228, 195, 122, 0); }
 }
 
+@keyframes coachSlideUp {
+  0% { opacity: 0; transform: translateY(40px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes coachOverlayIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes coachSpotlightPulse {
+  0%, 100% { box-shadow: 0 0 40px rgba(212,175,55,0.3), 0 0 0 0 rgba(212,175,55,0.15); }
+  50% { box-shadow: 0 0 50px rgba(212,175,55,0.45), 0 0 0 8px rgba(212,175,55,0.08); }
+}
+
 .animate-fadeIn {
   animation: fadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-coachSlideUp {
+  animation: coachSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-coachOverlay {
+  animation: coachOverlayIn 0.4s ease-out forwards;
+}
+
+.animate-coachSpotlight {
+  animation: coachSpotlightPulse 2.5s ease-in-out infinite;
 }
 
 .animate-float-gentle {
@@ -215,4 +246,18 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #c5a059;
+}
+
+/* ========================================================
+   PREMIUM DOCUMENT SCANNING ANIMATION
+   ======================================================== */
+@keyframes scanLine {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scanLine {
+  animation: scanLine 2.5s linear infinite;
 }

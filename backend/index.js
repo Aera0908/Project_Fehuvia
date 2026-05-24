@@ -11,11 +11,52 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Return JSON for malformed API payloads instead of Express's default HTML error page.
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON payload.' });
+  }
+
+  return next(err);
+});
+
 const PORT = process.env.PORT || 3001;
+
+// Global authoritative USD to PHP exchange rate (real-life fallback)
+let usdPhpRate = 58.30;
+
+async function updateExchangeRate() {
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await res.json();
+    if (data && data.rates && data.rates.PHP) {
+      usdPhpRate = Number(data.rates.PHP);
+      console.log(`📡 [Exchange Rate Service] Real-time rate loaded: ₱${usdPhpRate.toFixed(4)} PHP per $1.00 USD`);
+    }
+  } catch (err) {
+    console.error('⚠️ [Exchange Rate Service] Failed to fetch real-time exchange rates. Using fallback:', err.message);
+  }
+}
+
+// Initial fetch on server start
+updateExchangeRate();
+// Refresh every hour
+setInterval(updateExchangeRate, 60 * 60 * 1000);
 
 // Instantiate OpenAI Client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
+});
+
+// GET EXCHANGE RATES - Fetch authoritative USD to PHP exchange rate
+app.get('/api/rates', async (req, res) => {
+  res.json({
+    base: 'USD',
+    rates: {
+      PHP: usdPhpRate
+    },
+    timestamp: Date.now()
+  });
 });
 
 // =============================================
@@ -24,7 +65,7 @@ const openai = new OpenAI({
 
 // SIGNUP - Register a new user
 app.post('/api/auth/signup', async (req, res) => {
-  const { email, password, walletAddress } = req.body;
+  const { email, password, username, walletAddress } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -46,11 +87,12 @@ app.post('/api/auth/signup', async (req, res) => {
 
     // Insert the new user
     const insertQuery = `
-      INSERT INTO users (email, password_hash, wallet_address)
-      VALUES ($1, $2, $3)
-      RETURNING id, email, wallet_address, balance, portfolio_value, created_at
+      INSERT INTO users (username, email, password_hash, wallet_address)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, username, email, wallet_address, balance, portfolio_value, created_at
     `;
     const { rows } = await db.query(insertQuery, [
+      username || null,
       email.toLowerCase(),
       passwordHash,
       walletAddress || null
@@ -97,10 +139,12 @@ app.post('/api/auth/signup', async (req, res) => {
       token,
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         walletAddress: user.wallet_address,
         balance: parseFloat(user.balance),
-        portfolioValue: parseFloat(user.portfolio_value)
+        portfolioValue: parseFloat(user.portfolio_value),
+        createdAt: user.created_at
       }
     });
   } catch (error) {
@@ -119,7 +163,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const { rows, rowCount } = await db.query(
-      'SELECT id, email, password_hash, wallet_address, balance, portfolio_value FROM users WHERE email = $1',
+      'SELECT id, username, email, password_hash, wallet_address, balance, portfolio_value FROM users WHERE email = $1',
       [email.toLowerCase()]
     );
 
@@ -143,6 +187,7 @@ app.post('/api/auth/login', async (req, res) => {
       token,
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         walletAddress: user.wallet_address,
         balance: parseFloat(user.balance),
@@ -159,7 +204,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateJWT, async (req, res) => {
   try {
     const { rows, rowCount } = await db.query(
-      'SELECT id, email, wallet_address, balance, portfolio_value, automation_level, conversion_preference, risk_profile, bank_linked, bank_name, created_at FROM users WHERE id = $1',
+      'SELECT id, username, email, wallet_address, balance, portfolio_value, automation_level, conversion_preference, risk_profile, bank_linked, bank_name, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -171,6 +216,7 @@ app.get('/api/auth/me', authenticateJWT, async (req, res) => {
     res.json({
       user: {
         id: u.id,
+        username: u.username,
         email: u.email,
         walletAddress: u.wallet_address,
         balance: parseFloat(u.balance),
@@ -309,6 +355,47 @@ app.post('/api/auth/disconnect-bank', authenticateJWT, async (req, res) => {
   }
 });
 
+// UPDATE WALLET ADDRESS - Update only the Web3 settlement key
+app.post('/api/auth/wallet', authenticateJWT, async (req, res) => {
+  const { walletAddress } = req.body;
+
+  if (!walletAddress) {
+    return res.status(400).json({ error: 'Wallet address is required.' });
+  }
+
+  try {
+    const updateQuery = `
+      UPDATE users 
+      SET wallet_address = $1
+      WHERE id = $2
+      RETURNING id, email, wallet_address, balance, portfolio_value
+    `;
+    const { rows, rowCount } = await db.query(updateQuery, [
+      walletAddress.toLowerCase(),
+      req.user.id
+    ]);
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    console.log(`🔑 Wallet address linked successfully: ${walletAddress} for user: ${req.user.id}`);
+    res.json({
+      message: 'Wallet address linked successfully.',
+      user: {
+        id: rows[0].id,
+        email: rows[0].email,
+        walletAddress: rows[0].wallet_address,
+        balance: parseFloat(rows[0].balance),
+        portfolioValue: parseFloat(rows[0].portfolio_value)
+      }
+    });
+  } catch (error) {
+    console.error('Wallet update error:', error.message);
+    res.status(500).json({ error: 'Failed to update wallet address.' });
+  }
+});
+
 // =============================================
 // PUBLIC ENDPOINTS
 // =============================================
@@ -418,9 +505,9 @@ You must respond STRICLY in the following JSON format:
       });
     }
 
-    // 3.4 Request structured ChatCompletion from OpenAI (GPT-4o)
+    // 3.4 Request structured ChatCompletion from OpenAI (GPT-4o-mini)
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: "Generate the 30-day CFO cashflow forecast and invoice optimization tags." }
@@ -489,13 +576,25 @@ app.post('/api/invoices', authenticateJWT, async (req, res) => {
     const nextNum = parseInt(countCheck.rows[0].count) + 1;
     const invoiceId = `INV-2026-${String(nextNum).padStart(3, '0')}`;
 
-    // 3. Set up AI reason
-    const activeAiStatus = aiStatus || 'safe';
+    // 3. Set up dynamic AI status & reasoning based on amount threshold rules
+    const parsedAmount = parseFloat(amount);
+    let activeAiStatus = aiStatus;
+    
+    if (!activeAiStatus) {
+      if (parsedAmount > 50000) {
+        activeAiStatus = 'review';
+      } else if (parsedAmount > 10000) {
+        activeAiStatus = 'delay';
+      } else {
+        activeAiStatus = 'safe';
+      }
+    }
+
     const aiReason = activeAiStatus === 'safe'
-      ? 'AI Recommendation: Safe to pay. Cash reserves are projected to remain robust (>45 days runway) even post-settlement.'
+      ? 'AI Recommendation: Safe to pay. Corporate cash runway is projected to remain highly robust (>45 days runway) post-settlement.'
       : activeAiStatus === 'delay'
-      ? 'AI Recommendation: Postpone payment. Upcoming payroll introduces liquidity risk; delay past next week to balance inflow.'
-      : 'AI Recommendation: Review manually. Payment amount matches a duplicate billing range. Validate audit log prior to signing.';
+      ? 'AI Recommendation: Postpone payment. Upcoming operational and payroll expenses present minor liquidity constraint. Delay by 5 days is advised.'
+      : 'AI Recommendation: Review manually. Large transaction exceeds standard SME daily operating threshold. Verify authorization logs before settlement.';
 
     // 4. Insert invoice
     const issueDate = new Date().toISOString().substring(0, 10);
@@ -549,7 +648,7 @@ app.post('/api/invoices/:id/settle', authenticateJWT, async (req, res) => {
 
     const settledInvoice = rows[0];
     const amountToDeductUSD = parseFloat(settledInvoice.amount);
-    const amountToDeductPHP = amountToDeductUSD * 56; // Standard B2B conversion rate: ₱56 per $1
+    const amountToDeductPHP = amountToDeductUSD * usdPhpRate; // Real-life dynamic conversion rate
 
     // Deduct Peso operating balance from traditional bank link if active
     await db.query(

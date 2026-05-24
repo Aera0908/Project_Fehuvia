@@ -5,6 +5,8 @@ const API_BASE = 'http://localhost:3001';
 export default function AuthModal({ modalType, setModalType, setView }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -18,10 +20,19 @@ export default function AuthModal({ modalType, setModalType, setView }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Confirm password validation for signup
+    if (modalType === 'signup' && password !== confirmPassword) {
+      setError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
     setLoading(true);
 
     const endpoint = modalType === 'login' ? '/api/auth/login' : '/api/auth/signup';
-    const body = { email, password };
+    const body = modalType === 'login'
+      ? { email, password }
+      : { email, password, username: username.trim() || undefined };
 
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -125,6 +136,22 @@ export default function AuthModal({ modalType, setModalType, setView }) {
             {/* Form Inputs */}
             <form className="space-y-5" onSubmit={handleSubmit}>
               
+              {/* Username - Signup only */}
+              {modalType === 'signup' && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#e4c37a]/50 focus:ring-1 focus:ring-[#e4c37a]/40 transition-all font-light text-sm"
+                    placeholder="Enter a display name"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
                   Email Address
@@ -153,6 +180,24 @@ export default function AuthModal({ modalType, setModalType, setView }) {
                   minLength={6}
                 />
               </div>
+
+              {/* Confirm Password - Signup only */}
+              {modalType === 'signup' && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#e4c37a]/50 focus:ring-1 focus:ring-[#e4c37a]/40 transition-all font-light text-sm"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"

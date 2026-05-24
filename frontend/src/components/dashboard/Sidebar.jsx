@@ -11,6 +11,8 @@ export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) 
     { icon: BarChart3, label: 'Analytics' },
   ];
 
+  const hasSession = Boolean(localStorage.getItem('fehuvia_token'));
+
   const bottomNavItems = [
     { icon: Bell, label: 'Notifications' },
     { icon: HelpCircle, label: 'Help' },
@@ -34,7 +36,7 @@ export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) 
              src={logoGold}
              alt="Fehuvia"
              className="h-10 w-10 object-contain cursor-pointer hover:scale-105 transition-transform"
-             onClick={() => setView('landing')}
+             onClick={() => setView(hasSession ? 'dashboard' : 'landing')}
              style={{
                filter: 'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.4))'
              }}
@@ -52,7 +54,7 @@ export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) 
                 <button
                   key={item.label}
                   onClick={() => setCurrentPage(item.label)}
-                  className="group relative flex items-center justify-center w-12 h-12 rounded-xl transition-all cursor-pointer hover:bg-white/[0.02]"
+                  className="group relative flex items-center justify-center w-12 h-12 rounded-xl transition-all cursor-pointer hover:bg-white/2"
                   style={isActive ? {
                     background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
                     boxShadow: '0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)',

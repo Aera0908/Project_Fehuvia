@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle, ChevronDown, BookOpen, MessageSquare, ShieldCheck, Cpu, HardDrive, Check } from 'lucide-react';
 
-export function HelpView() {
+export function HelpView({ onStartTour }) {
   const [activeFaq, setActiveFaq] = useState(null);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketCategory, setTicketCategory] = useState('general');
@@ -189,6 +189,16 @@ export function HelpView() {
                 <span className="text-[#6a6a6a]">Morph L2 Gas Limit</span>
                 <span className="font-mono text-emerald-400 font-bold">&lt; 0.0001 ETH</span>
               </div>
+            </div>
+
+            {/* Retake Tour Button */}
+            <div className="border-t border-[#1b1b1d] pt-4">
+              <button
+                onClick={onStartTour}
+                className="w-full py-2.5 text-xs font-bold text-center text-white border border-gold-metallic/30 hover:border-gold-metallic hover:bg-gold-metallic/5 rounded-lg transition-all cursor-pointer uppercase tracking-wider"
+              >
+                Retake Workstation Tour
+              </button>
             </div>
           </div>
 

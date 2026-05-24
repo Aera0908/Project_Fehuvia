@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ethers } from 'ethers';
 import { Sidebar } from './Sidebar';
 import { CashflowPrediction } from './CashflowPrediction';
@@ -13,7 +14,7 @@ import { NotificationsView } from './NotificationsView';
 import { HelpView } from './HelpView';
 import DemoDisclaimer from '../DemoDisclaimer';
 import BrankasLinkModal from '../BrankasLinkModal';
-import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet } from 'lucide-react';
+import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck } from 'lucide-react';
 
 export default function DashboardLayout({ setView, handleLogout }) {
   // Navigation page routing state
@@ -62,8 +63,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
   // On-Chain MetaMask stablecoin balance (represented in USDC)
   const [walletUSDCBalance, setWalletUSDCBalance] = useState(0);
 
-  // Computed B2B corporate portfolio value in Pesos (₱ PHP = Traditional Bank + Web3 Wallet * 56 conversion rate)
-  const portfolioValue = balance + (walletUSDCBalance * 56);
+  // Dynamic USD to PHP exchange rate (real-life authoritative rate loaded from backend API)
+  const [exchangeRate, setExchangeRate] = useState(58.30);
+
+  // Computed B2B corporate portfolio value in Pesos (₱ PHP = Traditional Bank + Web3 Wallet * exchangeRate conversion rate)
+  const portfolioValue = balance + (walletUSDCBalance * exchangeRate);
 
   // Bank Connection State
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
@@ -86,6 +90,12 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // Invoices list state (initially loaded from DB)
   const [invoices, setInvoices] = useState([]);
+
+  // B2B fiat-to-stablecoin dynamic conversion modal state
+  const [conversionModal, setConversionModal] = useState({
+    isOpen: false,
+    invoice: null
+  });
 
   // AI predictions co-pilot cache
   const [predictions, setPredictions] = useState(null);
@@ -114,12 +124,27 @@ export default function DashboardLayout({ setView, handleLogout }) {
         const data = await res.json();
         if (data.user) {
           setUserProfile(data.user);
+          localStorage.setItem('fehuvia_user', JSON.stringify(data.user));
           if (data.user.balance !== undefined) setBalance(Number(data.user.balance));
           if (data.user.portfolioValue !== undefined) setPortfolioValue(Number(data.user.portfolioValue));
         }
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+    }
+  };
+
+  const fetchRates = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rates`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.rates && data.rates.PHP) {
+          setExchangeRate(Number(data.rates.PHP));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching exchange rates:', err);
     }
   };
 
@@ -194,6 +219,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   useEffect(() => {
     fetchProfile();
+    fetchRates();
     fetchInvoices();
     fetchPredictions();
     fetchPayments();
@@ -205,45 +231,322 @@ export default function DashboardLayout({ setView, handleLogout }) {
   // Translucent Toast Notifications State
   const [toast, setToast] = useState({ show: false, message: '', txHash: '' });
 
-  // Dynamic notifications state with seed records
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif-1',
-      title: 'Morph Transaction Cleared',
-      message: 'Invoice INV-001 ($125,000) successfully settled T+0 via Morph L2 testnet.',
-      time: '10 mins ago',
-      read: false,
-      type: 'success',
-      meta: 'Tx: 0x4f12d8a5...e712a'
-    },
-    {
-      id: 'notif-2',
-      title: 'Liquidity Runway Alert',
-      message: 'Runway is projected to drop below 30 days next month. AI optimization active.',
-      time: '2 hours ago',
-      read: false,
-      type: 'warning',
-      meta: 'AI Copilot Recommendation'
-    },
-    {
-      id: 'notif-3',
-      title: 'New Invoice Uploaded',
-      message: 'Tech Solutions Inc uploaded a new invoice of $210,000 for AI validation.',
-      time: '1 day ago',
-      read: true,
-      type: 'info',
-      meta: 'Supplier Tech Solutions'
-    },
-    {
-      id: 'notif-4',
-      title: 'Optimization Path Approved',
-      message: 'Runway optimization path applied successfully. Average settlement speed improved.',
-      time: '2 days ago',
-      read: true,
-      type: 'success',
-      meta: 'Morph Gas Paid'
+  // Logout confirmation modal state
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // EVM Wallet Modal states
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [detectedWallets, setDetectedWallets] = useState([]);
+
+  // Check and list installed wallets dynamically (installed first)
+  const checkInstalledWallets = () => {
+    const isMetaMask = !!(window.ethereum && window.ethereum.isMetaMask);
+    const isCoinbase = !!(window.coinbaseWalletExtension || (window.ethereum && window.ethereum.isCoinbaseWallet));
+    const isOKX = !!window.okxwallet;
+    const isRainbow = !!(window.ethereum && window.ethereum.isRainbow);
+
+    const walletList = [
+      { id: 'metamask', name: 'MetaMask', isInstalled: isMetaMask, installUrl: 'https://metamask.io/download/' },
+      { id: 'coinbase', name: 'Coinbase Wallet', isInstalled: isCoinbase, installUrl: 'https://www.coinbase.com/wallet' },
+      { id: 'okx', name: 'OKX Wallet', isInstalled: isOKX, installUrl: 'https://www.okx.com/web3' },
+      { id: 'rainbow', name: 'Rainbow', isInstalled: isRainbow, installUrl: 'https://rainbow.me/' },
+      { id: 'walletconnect', name: 'WalletConnect', isInstalled: false, installUrl: 'https://walletconnect.com/' }
+    ];
+
+    // Sort: installed wallets first!
+    const sorted = walletList.sort((a, b) => (b.isInstalled ? 1 : 0) - (a.isInstalled ? 1 : 0));
+    setDetectedWallets(sorted);
+  };
+
+  useEffect(() => {
+    checkInstalledWallets();
+  }, [isWalletModalOpen]);
+
+  const renderWalletLogo = (id) => {
+    const urls = {
+      metamask: 'https://raw.githubusercontent.com/rainbow-me/rainbowkit/main/packages/rainbowkit/src/wallets/walletConnectors/metaMaskWallet/metaMaskWallet.svg',
+      coinbase: 'https://raw.githubusercontent.com/rainbow-me/rainbowkit/main/packages/rainbowkit/src/wallets/walletConnectors/coinbaseWallet/coinbaseWallet.svg',
+      okx: 'https://raw.githubusercontent.com/rainbow-me/rainbowkit/main/packages/rainbowkit/src/wallets/walletConnectors/okxWallet/okxWallet.svg',
+      rainbow: 'https://raw.githubusercontent.com/rainbow-me/rainbowkit/main/packages/rainbowkit/src/wallets/walletConnectors/rainbowWallet/rainbowWallet.svg',
+      walletconnect: 'https://raw.githubusercontent.com/rainbow-me/rainbowkit/main/packages/rainbowkit/src/wallets/walletConnectors/walletConnectWallet/walletConnectWallet.svg'
+    };
+
+    if (urls[id]) {
+      return (
+        <img 
+          src={urls[id]} 
+          alt={`${id} logo`} 
+          className="w-7 h-7 object-contain" 
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+        />
+      );
     }
-  ]);
+    return <Wallet className="w-5 h-5 text-white" />;
+  };
+
+  // Dynamic notifications state - Seeded for admin demo, empty for new user profiles
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      const user = stored ? JSON.parse(stored) : {};
+      if (user.email && user.email.toLowerCase() === 'admin@fehuvia.com') {
+        return [
+          {
+            id: 'notif-1',
+            title: 'Morph Transaction Cleared',
+            message: 'Invoice INV-001 ($125,000) successfully settled T+0 via Morph L2 testnet.',
+            time: '10 mins ago',
+            read: false,
+            type: 'success',
+            meta: 'Tx: 0x4f12d8a5...e712a'
+          },
+          {
+            id: 'notif-2',
+            title: 'Liquidity Runway Alert',
+            message: 'Runway is projected to drop below 30 days next month. AI optimization active.',
+            time: '2 hours ago',
+            read: false,
+            type: 'warning',
+            meta: 'AI Copilot Recommendation'
+          },
+          {
+            id: 'notif-3',
+            title: 'New Invoice Uploaded',
+            message: 'Tech Solutions Inc uploaded a new invoice of $210,000 for AI validation.',
+            time: '1 day ago',
+            read: true,
+            type: 'info',
+            meta: 'Supplier Tech Solutions'
+          },
+          {
+            id: 'notif-4',
+            title: 'Optimization Path Approved',
+            message: 'Runway optimization path applied successfully. Average settlement speed improved.',
+            time: '2 days ago',
+            read: true,
+            type: 'success',
+            meta: 'Morph Gas Paid'
+          }
+        ];
+      }
+    } catch (e) {
+      console.error('Error seeding notifications:', e);
+    }
+    return [];
+  });
+
+  const [activeCoachStep, setActiveCoachStep] = useState(0);
+  const [showCoach, _setShowCoach] = useState(false);
+  const setShowCoach = (val) => {
+    // Coach mark is disabled for now
+  };
+  const [coachCoords, setCoachCoords] = useState(null);
+
+  const coachSteps = [
+    {
+      target: 'coach-runway-chart',
+      title: 'SME Cash Runway Predictor',
+      description: 'Your treasury central nervous system. Analyzes B2B invoice schedules and database ledgers to project a rolling 30-day cash buffer and warn you of upcoming cash bottlenecks.'
+    },
+    {
+      target: 'coach-copilot-sidebar',
+      title: 'AI Treasury Copilot',
+      description: 'Your automated CFO assistant. Evaluates cash levels and critical payroll windows to supply immediate, mathematically sound advice on whether to capture early payment yields or conserve liquidity.'
+    },
+    {
+      target: 'coach-payables-ledger',
+      title: 'Web3 On-Chain Settlements',
+      description: 'The execution layer. Facilitates direct traditional bank fiat debits and routes dynamic stablecoin settlements with T+0 event-listening logs executed live on the Morph L2 network.'
+    },
+    {
+      target: 'coach-cashflow-view',
+      title: 'Cash Flow Forecasts',
+      description: 'Visualizes historical cash flow metrics and projected balances based on planned inflow schedules. Calibrates operating thresholds dynamically to safeguard corporate liquidity.'
+    },
+    {
+      target: 'coach-invoices-view',
+      title: 'Corporate Invoice Ledger',
+      description: 'View your uploaded invoice database, upload new ones for automatic AI OCR scanning, and execute one-click early settlement stablecoin payments.'
+    },
+    {
+      target: 'coach-payments-view',
+      title: 'Settled Payments Registry',
+      description: 'The secure transaction history workspace. Logs immutable proof-of-payment receipts, complete with live block event transaction hashes executed on the Morph L2 testnet.'
+    },
+    {
+      target: 'coach-analytics-view',
+      title: 'Real-Time Advanced Analytics',
+      description: 'Analyzes portfolio ratios, average B2B settlement latency stats, dynamic stablecoin interest yields, and outstanding payables structures to guide corporate operations.'
+    },
+    {
+      target: 'coach-profile-view',
+      title: 'Workstation Connections & Settings',
+      description: 'Securely link traditional local bank accounts via Brankas Secure APIs, pair EVM wallets, configure AI risk profiles (Defensive, Balanced, Aggressive), and manage workstation parameters.'
+    }
+  ];
+
+  // Trigger Coach Mark tutorial ONLY for newly created accounts
+  // Checks: account created within the last 24 hours AND coach not already viewed
+  useEffect(() => {
+    const viewed = localStorage.getItem('fehuvia_coach_viewed');
+    if (viewed) return;
+    if (!userProfile.createdAt) return;
+
+    let createdTimeStr = userProfile.createdAt;
+    if (createdTimeStr && typeof createdTimeStr === 'string' && !createdTimeStr.endsWith('Z') && !createdTimeStr.includes('+') && !createdTimeStr.includes('-')) {
+      createdTimeStr = createdTimeStr.replace(' ', 'T') + 'Z';
+    }
+
+    const createdTime = new Date(createdTimeStr).getTime();
+    const now = Date.now();
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+    const isNewAccount = (now - createdTime) < twentyFourHoursMs;
+
+    if (isNewAccount && userProfile.email !== 'admin@fehuvia.com') {
+      setShowCoach(true);
+    }
+  }, [userProfile.createdAt]);
+
+  // Programmatically switch active dashboard page based on active tour step
+  useEffect(() => {
+    if (!showCoach) return;
+    
+    // Step index mappings:
+    // Steps 0, 1, 2 are on the Dashboard
+    if (activeCoachStep <= 2) {
+      setCurrentPage('Dashboard');
+    } else if (activeCoachStep === 3) {
+      setCurrentPage('Cash Flow');
+    } else if (activeCoachStep === 4) {
+      setCurrentPage('Invoices');
+    } else if (activeCoachStep === 5) {
+      setCurrentPage('Payments');
+    } else if (activeCoachStep === 6) {
+      setCurrentPage('Analytics');
+    } else if (activeCoachStep === 7) {
+      setCurrentPage('Profile');
+    }
+  }, [activeCoachStep, showCoach]);
+
+  // Update spotlight coordinates on step change
+  useEffect(() => {
+    if (!showCoach) return;
+    const step = coachSteps[activeCoachStep];
+    
+    const updateCoords = () => {
+      const el = document.getElementById(step.target);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const rect = el.getBoundingClientRect();
+        setCoachCoords({
+          top: rect.top + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+          height: rect.height
+        });
+      }
+    };
+
+    updateCoords();
+    const timer = setTimeout(updateCoords, 600);
+    window.addEventListener('resize', updateCoords);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateCoords);
+    };
+  }, [activeCoachStep, showCoach, currentPage]);
+
+  const getCardStyle = () => {
+    if (!coachCoords) {
+      return {
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        width: '420px'
+      };
+    }
+    
+    const cardWidth = 420;
+    const cardHeight = 240;
+    const gap = 24;
+    
+    const highlightBottom = coachCoords.top + coachCoords.height;
+    
+    // Check if there is enough space below the highlight in the viewport
+    const spaceBelow = window.innerHeight - (highlightBottom - window.scrollY);
+    const spaceAbove = coachCoords.top - window.scrollY;
+    
+    let top, left;
+    
+    if (spaceBelow > cardHeight + gap) {
+      // Place below the highlight
+      top = highlightBottom + gap;
+    } else if (spaceAbove > cardHeight + gap) {
+      // Place above the highlight
+      top = coachCoords.top - cardHeight - gap;
+    } else {
+      // Fallback: place in fixed bottom-right if it doesn't fit vertically
+      return {
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        width: '420px'
+      };
+    }
+    
+    // Center horizontally relative to the highlight, keeping it within screen bounds
+    const highlightCenter = coachCoords.left + coachCoords.width / 2;
+    left = highlightCenter - cardWidth / 2;
+    
+    const minLeft = 16;
+    const maxLeft = window.innerWidth - cardWidth - 16;
+    left = Math.max(minLeft, Math.min(maxLeft, left));
+    
+    return {
+      position: 'absolute',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${cardWidth}px`
+    };
+  };
+
+  const handleFinishCoach = () => {
+    localStorage.setItem('fehuvia_coach_viewed', 'true');
+    setShowCoach(false);
+  };
+
+  // Wire skipped-settings notification checker inside useEffect on profile load
+  useEffect(() => {
+    if (!userProfile.email) return;
+
+    // Check if they skipped onboarding settings
+    const isNewUser = userProfile.email !== 'admin@fehuvia.com';
+    const hasSkipped = !userProfile.automationLevel || !userProfile.riskProfile || 
+                      (userProfile.automationLevel === 'semi' && userProfile.riskProfile === 'balanced' && !localStorage.getItem('fehuvia_onboarding_completed'));
+
+    if (hasSkipped && isNewUser) {
+      const skipNotifId = 'notif-skipped-config';
+      setNotifications(prev => {
+        if (prev.some(n => n.id === skipNotifId)) return prev;
+        return [
+          {
+            id: skipNotifId,
+            title: '⚠️ Setup Incomplete: Preferences Skipped',
+            message: 'You skipped configuring your AI Autopilot and Risk Parameter settings. Tap here to configure them in your Profile settings.',
+            time: 'Just now',
+            read: false,
+            type: 'warning',
+            meta: 'Setup Required'
+          },
+          ...prev
+        ];
+      });
+    } else {
+      setNotifications(prev => prev.filter(n => n.id !== 'notif-skipped-config'));
+    }
+  }, [userProfile]);
 
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -273,7 +576,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+      const USDC_ADDRESS = "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
       const ERC20_ABI = ["function balanceOf(address account) view returns (uint256)"];
       const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
       const bal = await usdc.balanceOf(address);
@@ -292,31 +595,117 @@ export default function DashboardLayout({ setView, handleLogout }) {
   }, [userProfile.walletAddress]);
 
   // Handle MetaMask/EVM Wallet Connection
-  const handleConnectWallet = async () => {
-    if (!window.ethereum) {
+  const handleConnectWallet = async (walletId = 'metamask') => {
+    if (walletId === 'walletconnect') {
       setToast({
         show: true,
-        message: 'No Ethereum wallet found! Please install MetaMask to connect.',
-        txHash: 'Wallet Error'
+        message: 'WalletConnect integration is only available in production mainnet.',
+        txHash: 'EVM Rail'
+      });
+      return;
+    }
+
+    let providerSource = window.ethereum;
+    if (walletId === 'metamask') {
+      if (window.ethereum?.providers) {
+        providerSource = window.ethereum.providers.find(p => p.isMetaMask) || window.ethereum;
+      } else if (window.ethereum?.isMetaMask) {
+        providerSource = window.ethereum;
+      }
+    } else if (walletId === 'okx' && window.okxwallet) {
+      providerSource = window.okxwallet;
+    } else if (walletId === 'coinbase' && window.coinbaseWalletExtension) {
+      providerSource = window.coinbaseWalletExtension;
+    }
+
+    if (!providerSource) {
+      setToast({
+        show: true,
+        message: 'The selected EVM wallet extension is not installed in your browser.',
+        txHash: 'Extension Required'
       });
       return;
     }
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(providerSource);
       const accounts = await provider.send("eth_requestAccounts", []);
       const address = accounts[0];
 
-      // Request network switch to localhost (31337) or Morph L2 Testnet (2818)
-      const network = await provider.getNetwork();
-      const chainId = Number(network.chainId);
+      // Request network switch to Morph L2 Testnet (2910)
+      const initialChainIdHex = await providerSource.request({ method: 'eth_chainId' });
+      let chainId = Number(initialChainIdHex);
 
-      if (chainId !== 31337 && chainId !== 2818) {
+      if (chainId !== 2910 && chainId !== 2818) {
+        // Automatically request network switch to Morph Testnet (Chain ID: 2910, hex: 0xb5e)
+        try {
+          await providerSource.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xb5e' }],
+          });
+          // Re-fetch network details after switch approval
+          const hexChainId = await providerSource.request({ method: 'eth_chainId' });
+          chainId = Number(hexChainId);
+        } catch (switchError) {
+          // If the network is not added to the user's wallet, request to add it!
+          if (switchError.code === 4902 || switchError.message?.toLowerCase().includes('unrecognized')) {
+            try {
+              await providerSource.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: '0xb5e',
+                  chainName: 'Morph Testnet',
+                  nativeCurrency: {
+                    name: 'Ethereum',
+                    symbol: 'ETH',
+                    decimals: 18
+                  },
+                  rpcUrls: ['https://rpc-hoodi.morph.network'],
+                  blockExplorerUrls: ['https://explorer-testnet.morph.network']
+                }],
+              });
+              // Re-fetch network details after add
+              const hexChainId = await providerSource.request({ method: 'eth_chainId' });
+              chainId = Number(hexChainId);
+            } catch (addError) {
+              console.error('Failed to add Morph Testnet chain:', addError);
+            }
+          } else {
+            console.error('Failed to switch Morph Testnet chain:', switchError);
+          }
+        }
+      }
+
+      // Re-verify after switch attempt
+      if (chainId !== 2910 && chainId !== 2818) {
         setToast({
           show: true,
-          message: 'Please switch MetaMask to Hardhat Localhost (Chain ID: 31337) or Morph Testnet.',
+          message: 'Please switch your wallet to Morph Testnet (Chain ID: 2910) to continue.',
           txHash: 'Network Switch'
         });
+        return;
+      }
+
+      // Persist the connected wallet address to the backend database
+      const token = localStorage.getItem('fehuvia_token');
+      if (token) {
+        try {
+          const apiRes = await fetch(`${API_BASE}/api/auth/wallet`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ walletAddress: address })
+          });
+          if (!apiRes.ok) {
+            console.error('Failed to persist wallet address to database');
+          } else {
+            console.log('✅ Connected wallet successfully persisted to database');
+          }
+        } catch (apiErr) {
+          console.error('API Error persisting wallet address:', apiErr);
+        }
       }
 
       // Update userProfile state locally and persistently
@@ -326,6 +715,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
         return updated;
       });
       fetchWalletUSDCBalance(address);
+      setIsWalletModalOpen(false); // Close selection modal on success
 
       setToast({
         show: true,
@@ -336,8 +726,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       console.error('Wallet connection failed:', err);
       setToast({
         show: true,
-        message: `Wallet connection failed: ${err.message || err}`,
-        txHash: 'Connect Fail'
+        message: 'Connection failed. Please authorize the request in your wallet.',
+        txHash: 'Wallet Block'
       });
     }
   };
@@ -459,6 +849,20 @@ export default function DashboardLayout({ setView, handleLogout }) {
     const targetInvoice = invoices.find(inv => inv.id === id);
     if (!targetInvoice) return;
 
+    if (bankLinked) {
+      setConversionModal({
+        isOpen: true,
+        invoice: targetInvoice
+      });
+    } else {
+      executeSettlement(id);
+    }
+  };
+
+  const executeSettlement = async (id) => {
+    const targetInvoice = invoices.find(inv => inv.id === id);
+    if (!targetInvoice) return;
+
     // 1. Set specific invoice to loading state
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: true } : inv));
 
@@ -485,8 +889,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       const userAddress = await signer.getAddress();
 
       // Deployed contract addresses in our sandbox
-      const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-      const SETTLEMENT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+      const USDC_ADDRESS = "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
+      const SETTLEMENT_ADDRESS = "0xFc2Cc77640Ba5dEccD22BA0045a698b504871d95";
 
       // ABIs
       const ERC20_ABI = [
@@ -586,9 +990,10 @@ export default function DashboardLayout({ setView, handleLogout }) {
         return inv;
       }));
 
-      // Background refresh of AI forecasts, user balances, and settled payments
+      // Background refresh of AI forecasts, user balances, exchange rates, and settled payments
       fetchPredictions();
       fetchProfile();
+      fetchRates();
       fetchPayments();
 
     } catch (err) {
@@ -702,7 +1107,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
     <div className="dark h-screen bg-[#070708] flex relative overflow-hidden font-outfit text-white">
       
       {/* 1. Dashboard Sidebar Panel */}
-      <Sidebar setView={setView} currentPage={currentPage} setCurrentPage={setCurrentPage} handleLogout={handleLogout} />
+      <Sidebar setView={setView} currentPage={currentPage} setCurrentPage={setCurrentPage} handleLogout={() => setShowLogoutConfirm(true)} />
 
       {/* 2. Main Workstation Space - styled with premium Figma beveled solid borders */}
       <main 
@@ -926,7 +1331,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
                             onClick={() => {
                               setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
                               setShowNotificationsDropdown(false);
-                              setCurrentPage('Notifications');
+                              if (notif.id === 'notif-skipped-config') {
+                                setCurrentPage('Profile');
+                              } else {
+                                setCurrentPage('Notifications');
+                              }
                             }}
                             className={`p-4 flex gap-3 hover:bg-[#161618]/60 transition-colors cursor-pointer text-left ${
                               notif.read ? 'opacity-65' : ''
@@ -1100,49 +1509,67 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
               {/* Forecast Area Chart + AI Recommendations Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
+                <div id="coach-runway-chart" className="lg:col-span-2">
                   <CashflowPrediction predictions={predictions} balance={balance} />
                 </div>
-                <div>
+                <div id="coach-copilot-sidebar">
                   <AICopilot predictions={predictions} />
                 </div>
               </div>
 
               {/* Payables Ledger Table Panel */}
-              <InvoiceManagement
-                invoices={invoices}
-                handleSettle={handleSettle}
-                handleSchedule={handleSchedule}
-              />
+              <div id="coach-payables-ledger">
+                <InvoiceManagement
+                  invoices={invoices}
+                  handleSettle={handleSettle}
+                  handleSchedule={handleSchedule}
+                />
+              </div>
             </>
           )}
 
-          {currentPage === 'Cash Flow' && <CashFlowView predictions={predictions} runway={runway} />}
-
-          {currentPage === 'Invoices' && (
-            <InvoicesView
-              invoices={invoices}
-              handleSettle={handleSettle}
-              handleSchedule={handleSchedule}
-              handleUploadInvoice={handleUploadInvoice}
-            />
+          {currentPage === 'Cash Flow' && (
+            <div id="coach-cashflow-view" className="animate-fadeIn">
+              <CashFlowView predictions={predictions} runway={runway} />
+            </div>
           )}
 
-          {currentPage === 'Payments' && <PaymentsView payments={payments} />}
+          {currentPage === 'Invoices' && (
+            <div id="coach-invoices-view" className="animate-fadeIn">
+              <InvoicesView
+                invoices={invoices}
+                handleSettle={handleSettle}
+                handleSchedule={handleSchedule}
+                handleUploadInvoice={handleUploadInvoice}
+              />
+            </div>
+          )}
 
-          {currentPage === 'Analytics' && <AnalyticsView invoices={invoices} predictions={predictions} />}
+          {currentPage === 'Payments' && (
+            <div id="coach-payments-view" className="animate-fadeIn">
+              <PaymentsView payments={payments} />
+            </div>
+          )}
+
+          {currentPage === 'Analytics' && (
+            <div id="coach-analytics-view" className="animate-fadeIn">
+              <AnalyticsView invoices={invoices} predictions={predictions} />
+            </div>
+          )}
 
           {currentPage === 'Profile' && (
-            <ProfileView 
-              userProfile={userProfile} 
-              handleConnectWallet={handleConnectWallet}
-              handleDisconnectWallet={handleDisconnectWallet}
-              bankLinked={bankLinked}
-              bankName={bankName}
-              bankBalance={balance}
-              onOpenBankLink={() => setIsBankModalOpen(true)}
-              onDisconnectBank={handleDisconnectBank}
-            />
+            <div id="coach-profile-view" className="animate-fadeIn">
+              <ProfileView 
+                userProfile={userProfile} 
+                handleConnectWallet={() => setIsWalletModalOpen(true)}
+                handleDisconnectWallet={handleDisconnectWallet}
+                bankLinked={bankLinked}
+                bankName={bankName}
+                bankBalance={balance}
+                onOpenBankLink={() => setIsBankModalOpen(true)}
+                onDisconnectBank={handleDisconnectBank}
+              />
+            </div>
           )}
 
           {currentPage === 'Notifications' && (
@@ -1152,7 +1579,17 @@ export default function DashboardLayout({ setView, handleLogout }) {
             />
           )}
 
-          {currentPage === 'Help' && <HelpView />}
+          {currentPage === 'Help' && (
+            <HelpView 
+              onStartTour={() => { 
+                setToast({
+                  show: true,
+                  message: 'The interactive workstation tour is temporarily disabled.',
+                  txHash: 'Tour Disabled'
+                });
+              }} 
+            />
+          )}
 
         </div>
         </div>
@@ -1175,11 +1612,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
               </p>
 
               <button
-                onClick={handleConnectWallet}
+                onClick={() => setIsWalletModalOpen(true)}
                 className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4.5 cursor-pointer transform hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_20px_rgba(212,175,55,0.25)] flex items-center justify-center gap-2"
               >
                 <Wallet className="w-4 h-4" />
-                Connect MetaMask Wallet
+                Connect EVM Wallet
               </button>
 
               <p className="text-[10px] text-white/30 font-light mt-6 flex items-center gap-1.5 justify-center">
@@ -1199,6 +1636,323 @@ export default function DashboardLayout({ setView, handleLogout }) {
         onClose={() => setIsBankModalOpen(false)}
         onLinkSuccess={handleLinkBankSuccess}
       />
+
+      {/* simulated Philippine Conversion Consent Modal */}
+      {conversionModal.isOpen && conversionModal.invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] font-outfit">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/20 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setConversionModal({ isOpen: false, invoice: null })}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <ShieldAlert className="w-10 h-10 text-gold-metallic mx-auto mb-3" />
+              <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                Protected Treasury Rule
+              </h2>
+              <p className="text-white/40 text-xs font-light mt-1">
+                A dynamic fiat-to-stablecoin conversion is required to complete this Morph L2 settlement.
+              </p>
+            </div>
+
+            {/* Conversion Details */}
+            <div className="space-y-4 mb-6">
+              {/* Box 1: PHP Ledger */}
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Debit Account</span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                    <Landmark className="w-3.5 h-3.5 text-[#FF6600]" />
+                    {bankName} Commercial Link
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Conversion Amount</span>
+                  <span className="text-xs font-extrabold text-red-400 block mt-1">
+                    -₱{(conversionModal.invoice.amount * exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP
+                  </span>
+                </div>
+              </div>
+
+              {/* Conversion Middle Arrow Indicator */}
+              <div className="flex items-center justify-center gap-3 py-1">
+                <div className="h-px bg-white/5 flex-1"></div>
+                <div className="flex items-center gap-1 text-[9px] font-bold text-gold-metallic uppercase tracking-widest bg-[#0a0a0c] border border-gold-metallic/20 px-2 py-0.5 rounded-full">
+                  Rate: ₱{exchangeRate.toFixed(2)} PHP / $1.00 USDC
+                </div>
+                <div className="h-px bg-white/5 flex-1"></div>
+              </div>
+
+              {/* Box 2: Morph Stablecoins */}
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Credit / Mint Target</span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                    <Wallet className="w-3.5 h-3.5 text-gold-metallic" />
+                    Morph Settlement Key
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Settling Invoice</span>
+                  <span className="text-xs font-extrabold text-emerald-400 block mt-1">
+                    +${conversionModal.invoice.amount.toLocaleString()} USDC
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-[#D4AF37]/10 bg-[#D4AF37]/5 flex gap-2.5 items-start mb-6">
+              <ShieldCheck className="w-4 h-4 text-gold-metallic shrink-0 mt-0.5" />
+              <span className="text-[10px] text-[#fb923c] leading-relaxed font-light">
+                Fehuvia's protected conversion engine will dynamically debit your {bankName} balance and route the converted stablecoins through the settlement smart contract.
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const invId = conversionModal.invoice.id;
+                  setConversionModal({ isOpen: false, invoice: null });
+                  executeSettlement(invId);
+                }}
+                className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+              >
+                Authorize & Convert Fiat
+              </button>
+              
+              <button
+                onClick={() => setConversionModal({ isOpen: false, invoice: null })}
+                className="w-full text-center text-xs text-white/40 hover:text-white transition-colors cursor-pointer py-2 block"
+              >
+                Cancel Settlement
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* EVM Wallet Selection Modal */}
+      {isWalletModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] font-outfit">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/20 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setIsWalletModalOpen(false)}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <Wallet className="w-10 h-10 text-gold-metallic mx-auto mb-3" />
+              <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                Connect EVM Wallet
+              </h2>
+              <p className="text-white/40 text-xs font-light mt-1">
+                Select an injected browser extension wallet to establish your non-custodial L2 settlement key.
+              </p>
+            </div>
+
+            {/* Wallet List */}
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {detectedWallets.map((wallet) => (
+                <button
+                  key={wallet.id}
+                  onClick={() => {
+                    if (wallet.isInstalled || wallet.id === 'walletconnect') {
+                      handleConnectWallet(wallet.id);
+                    } else {
+                      window.open(wallet.installUrl, '_blank');
+                    }
+                  }}
+                  className="w-full p-4 bg-[#0a0a0c] hover:bg-[#161618] border border-[#2C2C2C] hover:border-gold-metallic/40 rounded-2xl flex items-center justify-between transition-all duration-300 cursor-pointer text-left group"
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Injected Premium SVG Wallet Logo */}
+                    <div className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center bg-[#141416] border border-white/5 shadow-md overflow-hidden transition-transform duration-300 group-hover:scale-105">
+                      {renderWalletLogo(wallet.id)}
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block group-hover:text-gold-metallic transition-colors">
+                        {wallet.name}
+                      </span>
+                      <span className="text-[9px] text-[#6a6a6a] block mt-0.5">
+                        {wallet.id === 'walletconnect' ? 'Connect via QR Code scan' : `Connect using ${wallet.name} extension`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Installed Status Badge */}
+                  <div className="flex items-center">
+                    {wallet.id === 'walletconnect' ? (
+                      <span className="text-[8px] font-bold text-[#6a6a6a] bg-white/5 border border-white/5 px-2 py-0.5 rounded uppercase tracking-wider">
+                        EVM Rail
+                      </span>
+                    ) : wallet.isInstalled ? (
+                      <span className="text-[8px] font-bold text-emerald-400 bg-emerald-950/20 border border-emerald-500/20 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Installed
+                      </span>
+                    ) : (
+                      <span className="text-[8px] font-bold text-zinc-500 bg-zinc-950/20 border border-zinc-800/20 px-2 py-0.5 rounded uppercase tracking-wider hover:text-white hover:border-white/30 transition-colors">
+                        Get Extension
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[9px] text-center text-white/30 leading-relaxed font-light mt-6">
+              *Fehuvia links your address securely for transaction signing. Your private keys never leave your custody.
+            </p>
+
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Coach Mark Spotlight Walkthrough */}
+      {showCoach && coachCoords && (
+        <div className="fixed inset-0 z-[120] pointer-events-none font-montserrat">
+          {/* Semi-transparent dark blocking layer */}
+          <div className="absolute inset-0 bg-black/65 backdrop-blur-[1px] pointer-events-auto animate-coachOverlay" onClick={handleFinishCoach}></div>
+          
+          {/* Glowing spotlight overlay around target element */}
+          <div 
+            className="absolute rounded-2xl border-2 border-gold-metallic/80 animate-coachSpotlight transition-all duration-500 ease-out z-10"
+            style={{
+              top: coachCoords.top - 8,
+              left: coachCoords.left - 8,
+              width: coachCoords.width + 16,
+              height: coachCoords.height + 16,
+              pointerEvents: 'none'
+            }}
+          >
+            {/* Pulsing indicator dot */}
+            <div className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 rounded-full bg-gold-metallic animate-ping"></div>
+            <div className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 rounded-full bg-gold-metallic border border-black"></div>
+          </div>
+
+          {/* Premium Floating Guide Card — Montserrat font for readability */}
+          <div 
+            key={`coach-step-${activeCoachStep}`} 
+            className="pointer-events-auto z-20 animate-coachSlideUp transition-all duration-300"
+            style={getCardStyle()}
+          >
+            <div className="glass-panel-gold rounded-3xl p-6 shadow-[0_24px_80px_rgba(0,0,0,0.95)] border border-[#D4AF37]/35 text-white">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-semibold text-gold-metallic uppercase tracking-widest bg-[#D4AF37]/10 px-2.5 py-1 rounded-full border border-gold-metallic/20">
+                  Step {activeCoachStep + 1} of {coachSteps.length}
+                </span>
+                <button onClick={handleFinishCoach} className="text-white/40 hover:text-white transition-colors cursor-pointer text-[11px] uppercase tracking-wider font-semibold">
+                  Skip
+                </button>
+              </div>
+
+              {/* Title & Description */}
+              <h3 className="text-lg text-white mb-2 font-semibold tracking-wide leading-snug">
+                {coachSteps[activeCoachStep].title}
+              </h3>
+              <p className="text-white/55 text-[13px] font-normal leading-relaxed mb-6">
+                {coachSteps[activeCoachStep].description}
+              </p>
+
+              {/* Step Indicators */}
+              <div className="flex items-center gap-1.5 mb-5">
+                {coachSteps.map((_, i) => (
+                  <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === activeCoachStep ? 'w-6 bg-[#D4AF37]' : i < activeCoachStep ? 'w-3 bg-[#D4AF37]/50' : 'w-3 bg-white/15'}`}></div>
+                ))}
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                <button
+                  onClick={() => setActiveCoachStep(prev => Math.max(0, prev - 1))}
+                  disabled={activeCoachStep === 0}
+                  className={`text-[11px] font-semibold uppercase tracking-wider text-white/50 hover:text-white transition-all disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed`}
+                >
+                  Back
+                </button>
+
+                {activeCoachStep < coachSteps.length - 1 ? (
+                  <button
+                    onClick={() => setActiveCoachStep(prev => prev + 1)}
+                    className="px-5 py-2.5 bg-gold-metallic text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:scale-[1.02] active:scale-95 transition-all shadow-md cursor-pointer"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFinishCoach}
+                    className="px-5 py-2.5 bg-emerald-500 text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:scale-[1.02] active:scale-95 transition-all shadow-md cursor-pointer"
+                  >
+                    Get Started
+                  </button>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal Overlay */}
+      {showLogoutConfirm && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] font-outfit text-white">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-sm p-6 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/25 text-center flex flex-col items-center">
+            
+            {/* Pulsing warning shield container */}
+            <div className="h-14 w-14 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic mb-5 animate-pulse">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+
+            <h3 className="font-cormorant text-2xl font-light tracking-wide text-white mb-2">
+              Confirm Registry Exit
+            </h3>
+            <p className="text-white/50 text-[11px] font-light leading-relaxed mb-6">
+              Are you sure you want to exit the secure workstation? Your active Morph L2 settlement keys will be disconnected from this active session.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="w-full space-y-2.5">
+              <button
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  handleLogout();
+                }}
+                className="w-full bg-[#D4AF37] hover:box-gold-glow text-black font-bold uppercase tracking-wider text-[10px] rounded-full py-3.5 transition-all shadow-md cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)'
+                }}
+              >
+                Exit Workstation
+              </button>
+              
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="w-full border border-white/10 hover:border-white/20 hover:bg-white/5 text-white font-bold uppercase tracking-wider text-[10px] rounded-full py-3.5 transition-all cursor-pointer"
+              >
+                Cancel & Resume
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

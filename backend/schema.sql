@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS users CASCADE;
 -- Stores credentials and wallet settings for authorized SME executives.
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(50),
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     wallet_address VARCHAR(42),

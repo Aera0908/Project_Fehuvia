@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
@@ -19,6 +19,7 @@ function App() {
   // Navigation View Coordinator: 'landing', 'dashboard', 'reader', or 'architecture'
   const [view, setView] = useState('landing');
   const [activeDoc, setActiveDoc] = useState('core-concept');
+  const [isAuthReady, setIsAuthReady] = useState(() => !localStorage.getItem('fehuvia_token'));
   
   const [modalType, setModalType] = useState('none');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -44,11 +45,16 @@ function App() {
           localStorage.removeItem('fehuvia_token');
           localStorage.removeItem('fehuvia_user');
         }
+        setIsAuthReady(true);
       })
       .catch(() => {
-        // Network error — don't clear token, stay on landing
+        // Network error — keep the cached session and allow the dashboard
+        setIsAuthReady(true);
       });
   }, []);
+
+  const sessionToken = localStorage.getItem('fehuvia_token');
+  const activeView = sessionToken && view === 'landing' ? 'dashboard' : view;
 
   // Logout handler: clears session and returns to landing page
   const handleLogout = () => {
@@ -72,13 +78,7 @@ function App() {
 
   useEffect(() => {
     // Only run scroll listener and observers if we are in landing view
-    if (view !== 'landing') {
-      setIsNavbarScrolled(false);
-      setIsHeroVisible(false);
-      setIsVisionVisible(false);
-      setIsProductVisible(false);
-      setIsFeaturesVisible(false);
-      setIsFooterVisible(false);
+    if (activeView !== 'landing') {
       return;
     }
 
@@ -126,20 +126,31 @@ function App() {
       observers.forEach((observer) => observer.disconnect());
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [view]);
+  }, [activeView]);
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center font-outfit">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 rounded-full border-2 border-[#D4AF37]/30 border-t-[#D4AF37] animate-spin" />
+          <p className="text-xs uppercase tracking-[0.35em] text-white/45">Restoring session</p>
+        </div>
+      </div>
+    );
+  }
 
   // If in onboarding view, render the multi-step configuration wizard
-  if (view === 'onboarding') {
+  if (activeView === 'onboarding') {
     return <OnboardingWizard setView={setView} />;
   }
 
   // If in dashboard view, render the figma financial dashboard layout
-  if (view === 'dashboard') {
+  if (activeView === 'dashboard') {
     return <DashboardLayout setView={setView} handleLogout={handleLogout} />;
   }
 
   // If in content reader view, render the full-screen interactive document sheet
-  if (view === 'reader') {
+  if (activeView === 'reader') {
     return (
       <ContentReader
         activePage={activeDoc}
@@ -150,7 +161,7 @@ function App() {
   }
 
   // If in architecture view, render the interactive structural topology diagram
-  if (view === 'architecture') {
+  if (activeView === 'architecture') {
     return (
       <ArchitectureView
         onClose={() => setView('landing')}
