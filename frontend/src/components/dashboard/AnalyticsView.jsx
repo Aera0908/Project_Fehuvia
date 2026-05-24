@@ -1,14 +1,26 @@
 import React from 'react';
 import { RadialBarChart, RadialBar, Legend, ResponsiveContainer, PolarAngleAxis, Tooltip } from 'recharts';
-import { Zap, Percent, ShieldCheck, Flame, Cpu, ArrowUpRight } from 'lucide-react';
+import { Zap, Percent, ShieldCheck, Flame, Cpu } from 'lucide-react';
 
-const radialData = [
-  { name: 'Early-Discounts Capture', value: 92, fill: '#fcf6ba' },
-  { name: 'Cash Flow Efficiency', value: 85, fill: '#D4AF37' },
-  { name: 'USDC Settlement Coverage', value: 78, fill: '#4ade80' },
-];
+export function AnalyticsView({ invoices = [], predictions }) {
+  const settled = invoices.filter(inv => inv.settled);
+  
+  // Compute real dynamic indices
+  const discountSavings = settled.reduce((acc, inv) => acc + inv.amount * 0.025, 0); // 2.5% early settlement discount
+  const gasSavings = settled.length * 15.42; // simulated Morph vs Mainnet Ethereum gas savings
+  
+  const discountCaptureRate = invoices.length > 0 ? Math.round((settled.length / invoices.length) * 100) : 0;
+  const cashFlowEfficiency = predictions?.predicted_runway ? Math.min(100, Math.round((predictions.predicted_runway / 60) * 100)) : 85;
+  const settlementCoverage = invoices.length > 0 ? Math.round((settled.length / invoices.length) * 100) : 0;
 
-export function AnalyticsView() {
+  const radialData = [
+    { name: 'Early-Discounts Capture', value: discountCaptureRate || 40, fill: '#fcf6ba' },
+    { name: 'Cash Flow Efficiency', value: cashFlowEfficiency || 75, fill: '#D4AF37' },
+    { name: 'USDC Settlement Coverage', value: settlementCoverage || 30, fill: '#4ade80' },
+  ];
+
+  const overallYield = Math.round(radialData.reduce((acc, item) => acc + item.value, 0) / 3);
+
   return (
     <div className="space-y-8 animate-fadeIn font-outfit text-white">
       
@@ -65,7 +77,7 @@ export function AnalyticsView() {
               {/* Center efficiency score */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-[10px] uppercase tracking-wider text-[#6a6a6a] font-bold">Overall Yield</span>
-                <span className="text-3xl font-black text-white">88.5%</span>
+                <span className="text-3xl font-black text-white">{overallYield}%</span>
                 <span className="text-[9px] text-[#4ade80] font-semibold mt-0.5">OPTIMIZED</span>
               </div>
             </div>
@@ -97,10 +109,10 @@ export function AnalyticsView() {
             </div>
             <div>
               <span className="text-[10px] font-bold text-black/55 uppercase tracking-widest block mb-1">Discount Savings</span>
-              <p className="text-3xl font-black text-black tracking-tight">$34,810.50</p>
+              <p className="text-3xl font-black text-black tracking-tight">${discountSavings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <p className="text-xs text-black/75 leading-relaxed font-medium mt-2">
-              Captured via T+0 instant L2 settlements which enabled early settlement discounts of up to 3%.
+              Captured via T+0 instant L2 settlements which enabled early settlement discounts of up to 2.5%.
             </p>
           </div>
 
@@ -112,7 +124,7 @@ export function AnalyticsView() {
             </div>
             <div>
               <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-1">Gas Cost Reduction</span>
-              <p className="text-3xl font-black text-white tracking-tight">$8,290.45</p>
+              <p className="text-3xl font-black text-white tracking-tight">${gasSavings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <p className="text-xs text-white/60 leading-relaxed font-light mt-2">
               L2 settlement rails prevent high Ethereum mainnet fee bottlenecks. AI batches and submits on L2 automatically.
@@ -127,10 +139,11 @@ export function AnalyticsView() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { title: 'AI Copilot Engine', subtitle: 'Optimizing 100% of pipeline', icon: Cpu, score: 'Active' },
-          { title: 'Financial Runway', subtitle: 'Extended by 12.4 days', icon: ShieldCheck, score: '+28.9%' },
+          { title: 'Financial Runway', subtitle: `Extended by ${predictions?.predicted_runway ? (predictions.predicted_runway - 30).toFixed(1) : '12.4'} days`, icon: ShieldCheck, score: '+28.9%' },
           { title: 'L2 Congestion Guard', subtitle: 'Auto-batching triggered', icon: Flame, score: 'Stable' },
         ].map((item, idx) => {
           const Icon = item.icon;
+          const isShieldCheck = item.icon === ShieldCheck;
           return (
             <div key={idx} className="plate-black-metallic shape-asymmetric-2 p-5 border border-[#2C2C2C] flex items-center justify-between">
               <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 import React from 'react';
+import CountUp from './CountUp';
 
-export default function Features({ setModalType }) {
+export default function Features({ featuresRef, isVisible, setModalType }) {
   const capabilities = [
     {
       title: 'Zero-Friction B2B Settlements',
@@ -16,7 +17,7 @@ export default function Features({ setModalType }) {
     {
       title: 'Deterministic Treasury AI',
       metric: '98.7% Forecast Accuracy',
-      spec: 'Our GPT-4o powered cashflow engine contextually parses invoice metadata, counterparty risk histories, and multi-currency ledgers with zero hallucination bounds.',
+      spec: 'Our AI powered cashflow engine contextually parses invoice metadata, counterparty risk histories, and multi-currency ledgers with zero hallucination bounds.',
       stats: [
         { label: 'Analysis Speed', value: '< 800ms' },
         { label: 'Context Length', value: '128k Tokens' },
@@ -48,19 +49,37 @@ export default function Features({ setModalType }) {
     },
   ];
 
+  const renderStatValue = (stat) => {
+    switch (stat.label) {
+      case 'Morph Block Time':
+        return <CountUp value={1.5} suffix="s" decimals={1} active={isVisible} />;
+      case 'Avg. Gas Cost':
+        return <CountUp value={0.01} prefix="< $" decimals={2} active={isVisible} />;
+      case 'Analysis Speed':
+        return <CountUp value={800} prefix="< " suffix="ms" active={isVisible} />;
+      case 'Context Length':
+        return <CountUp value={128} suffix="k Tokens" active={isVisible} />;
+      case 'Swap Slippage':
+        return <CountUp value={0} decimals={2} suffix="%" active={isVisible} />;
+      default:
+        return stat.value;
+    }
+  };
+
   return (
     <section
       id="features"
+      ref={featuresRef}
       className="relative z-10 px-8 md:px-16 py-28 min-h-[100svh] snap-start flex items-center overflow-hidden font-outfit"
       style={{
         backgroundImage: 'linear-gradient(135deg, rgba(228, 195, 122, 0.08), rgba(0, 0, 0, 0.96)), radial-gradient(circle at top left, rgba(228, 195, 122, 0.12), transparent 30%), radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.03), transparent 25%)',
       }}
     >
-      <div className="max-w-[1400px] mx-auto w-full relative z-10">
+      <div className={`max-w-[1400px] mx-auto w-full relative z-10 transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
         
         {/* Header Block */}
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-16">
-          <div>
+          <div className={`transition-all duration-700 delay-100 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             <span className="text-[#e4c37a] text-xs font-bold tracking-[0.3em] uppercase drop-shadow-[0_0_10px_rgba(228,195,122,0.3)] block mb-3">
               Protocol Capabilities
             </span>
@@ -70,7 +89,7 @@ export default function Features({ setModalType }) {
           </div>
           <button
             onClick={() => setModalType('signup')}
-            className="border border-[#e4c37a]/30 text-[#fcf6ba] hover:bg-[#e4c37a]/10 font-bold uppercase tracking-wider text-xs rounded-full px-8 py-4 transition-all duration-300 transform hover:-translate-y-0.5 cursor-pointer shrink-0 font-outfit"
+            className={`border border-[#e4c37a]/30 text-[#fcf6ba] hover:bg-[#e4c37a]/10 font-bold uppercase tracking-wider text-xs rounded-full px-8 py-4 transition-all duration-300 transform hover:-translate-y-0.5 cursor-pointer shrink-0 font-outfit ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
           >
             Inquire Platform Access
           </button>
@@ -83,7 +102,8 @@ export default function Features({ setModalType }) {
             return (
               <article
                 key={item.title}
-                className={`group ${item.plateClass} ${item.shapeClass} p-8 md:p-10 relative overflow-hidden flex flex-col justify-between min-h-[320px]`}
+                className={`group ${item.plateClass} ${item.shapeClass} p-8 md:p-10 relative overflow-hidden flex flex-col justify-between min-h-[320px] transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                style={{ transitionDelay: isVisible ? `${180 + index * 100}ms` : '0ms' }}
               >
                 {/* Visual Glass Hover Glare Effect */}
                 <div className="absolute top-0 right-0 w-[200%] h-[200%] bg-white/[0.02] opacity-0 group-hover:opacity-100 rotate-45 translate-x-[-150%] group-hover:translate-x-[50%] transition-all duration-[1.5s] ease-in-out pointer-events-none" />
@@ -119,7 +139,7 @@ export default function Features({ setModalType }) {
                         {stat.label}
                       </span>
                       <span className={`text-lg font-black tracking-wide ${isGold ? 'text-black' : 'text-white'}`}>
-                        {stat.value}
+                        {renderStatValue(stat)}
                       </span>
                     </div>
                   ))}

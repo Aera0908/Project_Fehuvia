@@ -1,4 +1,5 @@
 import React from 'react';
+import CountUp from './CountUp';
 
 export default function About({ visionRef, isVisionVisible }) {
   const globalMetrics = [
@@ -97,7 +98,18 @@ export default function About({ visionRef, isVisionVisible }) {
                     {/* Stat Number - High-contrast charcoal for gold plate, metallic-gold for dark plate */}
                     <div className={`text-4xl md:text-5xl font-black tracking-tight mb-2 ${isGold ? 'text-black' : 'text-gold-metallic'
                       }`}>
-                      {item.stat}
+                        {item.label === 'Liquidity Crises' && (
+                          <CountUp value={74} suffix="%" active={isVisionVisible} />
+                        )}
+                        {item.label === 'Trapped Capital' && (
+                          <CountUp value={3.1} prefix="$" suffix="T" decimals={1} active={isVisionVisible} />
+                        )}
+                        {item.label === 'Instant Settlements' && (
+                          <CountUp value={0} prefix="T+" active={isVisionVisible} />
+                        )}
+                        {item.label === 'AI Forecast Precision' && (
+                          <CountUp value={98.7} suffix="%" decimals={1} active={isVisionVisible} />
+                        )}
                     </div>
                     {/* Stat Label */}
                     <div className={`text-xs font-bold uppercase tracking-wider mb-4 ${isGold ? 'text-black/60' : 'text-[#fcf6ba]'

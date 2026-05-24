@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ethers } from 'ethers';
 import { Sidebar } from './Sidebar';
 import { CashflowPrediction } from './CashflowPrediction';
 import { AICopilot } from './AICopilot';
@@ -10,9 +11,11 @@ import { AnalyticsView } from './AnalyticsView';
 import { ProfileView } from './ProfileView';
 import { NotificationsView } from './NotificationsView';
 import { HelpView } from './HelpView';
-import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard } from 'lucide-react';
+import DemoDisclaimer from '../DemoDisclaimer';
+import BrankasLinkModal from '../BrankasLinkModal';
+import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet } from 'lucide-react';
 
-export default function DashboardLayout({ setView }) {
+export default function DashboardLayout({ setView, handleLogout }) {
   // Navigation page routing state
   const [currentPage, setCurrentPage] = useState('Dashboard');
 
@@ -44,85 +47,160 @@ export default function DashboardLayout({ setView }) {
     }
   };
 
-  // Available Balance state
-  const [balance, setBalance] = useState(1289401.07);
-  const [portfolioValue, setPortfolioValue] = useState(2847392.00);
+  const API_BASE = 'http://localhost:3001';
 
-  // Invoices list state
-  const [invoices, setInvoices] = useState([
-    {
-      id: 'INV-001',
-      supplier: 'Acme Corp',
-      amount: 125000,
-      dueDate: '2026-05-20',
-      aiAction: { status: 'safe', message: 'Safe to Pay' },
-      settled: false,
-      scheduled: false,
-      loading: false
-    },
-    {
-      id: 'INV-002',
-      supplier: 'Global Suppliers Ltd',
-      amount: 89500,
-      dueDate: '2026-05-22',
-      aiAction: { status: 'safe', message: 'Safe to Pay' },
-      settled: false,
-      scheduled: false,
-      loading: false
-    },
-    {
-      id: 'INV-003',
-      supplier: 'Tech Solutions Inc',
-      amount: 210000,
-      dueDate: '2026-05-25',
-      aiAction: { status: 'delay', message: 'Delay 5 Days', delayDays: 5 },
-      settled: false,
-      scheduled: false,
-      loading: false
-    },
-    {
-      id: 'INV-004',
-      supplier: 'Manufacturing Co',
-      amount: 156000,
-      dueDate: '2026-05-21',
-      aiAction: { status: 'safe', message: 'Safe to Pay' },
-      settled: false,
-      scheduled: false,
-      loading: false
-    },
-    {
-      id: 'INV-005',
-      supplier: 'Cloud Services Ltd',
-      amount: 45000,
-      dueDate: '2026-05-28',
-      aiAction: { status: 'review', message: 'Review Required' },
-      settled: false,
-      scheduled: false,
-      loading: false
-    },
-  ]);
-
-  // Settled Payments Log State (initially seeded with high fidelity items)
-  const [payments, setPayments] = useState([
-    {
-      timestamp: '2026-05-18 14:32:05',
-      invoiceId: 'INV-000',
-      supplier: 'Acme Corp',
-      destination: '0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e',
-      amount: 45000,
-      fee: '< 0.0001 ETH',
-      txHash: '0x4f12d8a5a415a7cf90b21a3617b019b88ef11b7fa239d031e21b79fca23e712a'
-    },
-    {
-      timestamp: '2026-05-19 09:12:44',
-      invoiceId: 'INV-008',
-      supplier: 'Oracle Corp',
-      destination: '0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e',
-      amount: 110000,
-      fee: '< 0.0001 ETH',
-      txHash: '0x8f3c7e81b9e1165a98c72b9eb4d693fe3ea23ef7fa239d031e21b79fca23e712a'
+  // Traditional bank balance (represented in Philippine Pesos)
+  const [balance, setBalance] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      return stored ? Number(JSON.parse(stored).balance || 0) : 0;
+    } catch {
+      return 0;
     }
-  ]);
+  });
+
+  // On-Chain MetaMask stablecoin balance (represented in USDC)
+  const [walletUSDCBalance, setWalletUSDCBalance] = useState(0);
+
+  // Computed B2B corporate portfolio value in Pesos (₱ PHP = Traditional Bank + Web3 Wallet * 56 conversion rate)
+  const portfolioValue = balance + (walletUSDCBalance * 56);
+
+  // Bank Connection State
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [bankLinked, setBankLinked] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      return stored ? !!JSON.parse(stored).bankLinked : false;
+    } catch {
+      return false;
+    }
+  });
+  const [bankName, setBankName] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      return stored ? (JSON.parse(stored).bankName || '') : '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Invoices list state (initially loaded from DB)
+  const [invoices, setInvoices] = useState([]);
+
+  // AI predictions co-pilot cache
+  const [predictions, setPredictions] = useState(null);
+  const [runway, setRunway] = useState(45);
+  const [trend, setTrend] = useState('stable');
+
+  // User Profile
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      return stored ? JSON.parse(stored) : { email: 'admin@fehuvia.com' };
+    } catch {
+      return { email: 'admin@fehuvia.com' };
+    }
+  });
+
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setUserProfile(data.user);
+          if (data.user.balance !== undefined) setBalance(Number(data.user.balance));
+          if (data.user.portfolioValue !== undefined) setPortfolioValue(Number(data.user.portfolioValue));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    }
+  };
+
+  const fetchInvoices = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/invoices`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map(inv => ({
+          id: inv.id,
+          supplier: inv.supplier,
+          amount: Number(inv.amount),
+          dueDate: inv.dueDate,
+          aiAction: {
+            status: inv.aiStatus,
+            message: inv.aiStatus === 'safe' ? 'Safe to Pay' : inv.aiStatus === 'delay' ? 'Delay 5 Days' : 'Review Required',
+            reason: inv.aiReason
+          },
+          settled: inv.status === 'settled',
+          scheduled: inv.status === 'scheduled',
+          loading: false,
+          txHash: inv.txHash,
+          supplierWallet: inv.supplierWallet
+        }));
+        setInvoices(mapped);
+      }
+    } catch (err) {
+      console.error('Error fetching invoices:', err);
+    }
+  };
+
+  const fetchPredictions = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/cashflow/prediction`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPredictions(data);
+        if (data.predicted_runway) setRunway(data.predicted_runway);
+        if (data.cash_flow_trend) setTrend(data.cash_flow_trend);
+      }
+    } catch (err) {
+      console.error('Error fetching predictions:', err);
+    }
+  };
+
+  const fetchPayments = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/payments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPayments(data);
+      }
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+    fetchInvoices();
+    fetchPredictions();
+    fetchPayments();
+  }, []);
+
+  // Settled Payments Log State (initially loaded from backend database)
+  const [payments, setPayments] = useState([]);
 
   // Translucent Toast Notifications State
   const [toast, setToast] = useState({ show: false, message: '', txHash: '' });
@@ -185,41 +263,308 @@ export default function DashboardLayout({ setView }) {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Handle single invoice settlement
-  const handleSettle = (id) => {
+  // Fetch live on-chain stablecoin balance of connected MetaMask wallet
+  const fetchWalletUSDCBalance = async (addressOverride = null) => {
+    const address = addressOverride || userProfile.walletAddress;
+    if (!window.ethereum || !address) {
+      setWalletUSDCBalance(0);
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+      const ERC20_ABI = ["function balanceOf(address account) view returns (uint256)"];
+      const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
+      const bal = await usdc.balanceOf(address);
+      setWalletUSDCBalance(Number(ethers.formatUnits(bal, 6)));
+    } catch (err) {
+      console.error("Failed to fetch on-chain USDC balance:", err);
+      setWalletUSDCBalance(0);
+    }
+  };
+
+  // Wire automatic wallet balance checking inside mount hook
+  useEffect(() => {
+    if (userProfile.walletAddress) {
+      fetchWalletUSDCBalance();
+    }
+  }, [userProfile.walletAddress]);
+
+  // Handle MetaMask/EVM Wallet Connection
+  const handleConnectWallet = async () => {
+    if (!window.ethereum) {
+      setToast({
+        show: true,
+        message: 'No Ethereum wallet found! Please install MetaMask to connect.',
+        txHash: 'Wallet Error'
+      });
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      const address = accounts[0];
+
+      // Request network switch to localhost (31337) or Morph L2 Testnet (2818)
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+
+      if (chainId !== 31337 && chainId !== 2818) {
+        setToast({
+          show: true,
+          message: 'Please switch MetaMask to Hardhat Localhost (Chain ID: 31337) or Morph Testnet.',
+          txHash: 'Network Switch'
+        });
+      }
+
+      // Update userProfile state locally and persistently
+      setUserProfile(prev => {
+        const updated = { ...prev, walletAddress: address };
+        localStorage.setItem('fehuvia_user', JSON.stringify(updated));
+        return updated;
+      });
+      fetchWalletUSDCBalance(address);
+
+      setToast({
+        show: true,
+        message: `Wallet connected: ${address.substring(0, 6)}...${address.substring(38)}`,
+        txHash: 'Web3 Ready'
+      });
+    } catch (err) {
+      console.error('Wallet connection failed:', err);
+      setToast({
+        show: true,
+        message: `Wallet connection failed: ${err.message || err}`,
+        txHash: 'Connect Fail'
+      });
+    }
+  };
+
+  // Handle Wallet Disconnection
+  const handleDisconnectWallet = () => {
+    setUserProfile(prev => {
+      const updated = { ...prev };
+      delete updated.walletAddress;
+      localStorage.setItem('fehuvia_user', JSON.stringify(updated));
+      return updated;
+    });
+    setWalletUSDCBalance(0);
+
+    setToast({
+      show: true,
+      message: 'Wallet disconnected from workstation.',
+      txHash: 'Web3 Off'
+    });
+  };
+
+  // Handle Philippine Bank linking success via simulated Brankas API
+  const handleLinkBankSuccess = async ({ bankName, balance: linkedBalance }) => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/link-bank`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ bankName, balance: linkedBalance })
+      });
+
+      if (!res.ok) throw new Error("Failed to link bank account in database.");
+
+      const data = await res.json();
+      
+      // Update local storage session
+      const storedUser = JSON.parse(localStorage.getItem('fehuvia_user') || '{}');
+      const updatedUser = {
+        ...storedUser,
+        bankLinked: true,
+        bankName: bankName,
+        balance: linkedBalance
+      };
+      localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
+
+      setUserProfile(updatedUser);
+      setBankLinked(true);
+      setBankName(bankName);
+      setBalance(linkedBalance);
+      setIsBankModalOpen(false);
+
+      setToast({
+        show: true,
+        message: `Successfully linked your ${bankName} account via Brankas!`,
+        txHash: 'API Connected'
+      });
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: 'Failed to establish bank connection. Please try again.',
+        txHash: 'API Error'
+      });
+    }
+  };
+
+  // Handle traditional banking disconnection
+  const handleDisconnectBank = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/disconnect-bank`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error("Failed to disconnect bank account.");
+
+      // Update local storage session
+      const storedUser = JSON.parse(localStorage.getItem('fehuvia_user') || '{}');
+      const updatedUser = {
+        ...storedUser,
+        bankLinked: false,
+        bankName: '',
+        balance: 0.00
+      };
+      localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
+
+      setUserProfile(updatedUser);
+      setBankLinked(false);
+      setBankName('');
+      setBalance(0.00);
+
+      setToast({
+        show: true,
+        message: 'Traditional banking account disconnected.',
+        txHash: 'API Offline'
+      });
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: 'Failed to disconnect bank account.',
+        txHash: 'API Error'
+      });
+    }
+  };
+
+  // Handle single invoice settlement via live Ethers.js Smart Contracts
+  const handleSettle = async (id) => {
+    const targetInvoice = invoices.find(inv => inv.id === id);
+    if (!targetInvoice) return;
+
     // 1. Set specific invoice to loading state
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: true } : inv));
 
-    // 2. Simulate 1.2s Morph Testnet transaction finality
-    setTimeout(() => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) {
+      setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+      return;
+    }
+
+    // 2. Validate MetaMask injection
+    if (!window.ethereum) {
+      setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+      setToast({
+        show: true,
+        message: 'MetaMask is required to complete this B2B stablecoin settlement.',
+        txHash: 'Wallet Required'
+      });
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const userAddress = await signer.getAddress();
+
+      // Deployed contract addresses in our sandbox
+      const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+      const SETTLEMENT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+
+      // ABIs
+      const ERC20_ABI = [
+        "function approve(address spender, uint256 amount) returns (bool)",
+        "function allowance(address owner, address spender) view returns (uint256)",
+        "function balanceOf(address account) view returns (uint256)",
+        "function mint(address to, uint256 amount) returns (bool)"
+      ];
+
+      const SETTLEMENT_ABI = [
+        "function settleInvoice(string invoiceId, address supplier, uint256 amount) external"
+      ];
+
+      const amountDecimals = ethers.parseUnits(targetInvoice.amount.toString(), 6);
+      const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, signer);
+      const settlement = new ethers.Contract(SETTLEMENT_ADDRESS, SETTLEMENT_ABI, signer);
+
+      // Faucet Auto-Mint: If buyer lacks enough mUSDC, automatically mint 50k tokens!
+      const balanceOnChain = await usdc.balanceOf(userAddress);
+      if (balanceOnChain < amountDecimals) {
+        setToast({
+          show: true,
+          message: 'Zero mUSDC detected. Executing faucet minting transaction in MetaMask...',
+          txHash: 'USDC Faucet'
+        });
+        const mintTx = await usdc.mint(userAddress, ethers.parseUnits("50000", 6));
+        await mintTx.wait();
+      }
+
+      // Allowance Approval Check
+      const currentAllowance = await usdc.allowance(userAddress, SETTLEMENT_ADDRESS);
+      if (currentAllowance < amountDecimals) {
+        setToast({
+          show: true,
+          message: 'USDC allowance approval required. Confirm transaction in MetaMask...',
+          txHash: 'Approval Request'
+        });
+        const approveTx = await usdc.approve(SETTLEMENT_ADDRESS, ethers.parseUnits("1000000", 6));
+        await approveTx.wait();
+      }
+
+      // Invoice Settlement Transaction
+      setToast({
+        show: true,
+        message: `Settling ${targetInvoice.id} ($${targetInvoice.amount.toLocaleString()}) via B2BSettlement contract...`,
+        txHash: 'Signing Invoice'
+      });
+
+      const supplierWallet = targetInvoice.supplierWallet || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+      const settleTx = await settlement.settleInvoice(targetInvoice.id, supplierWallet, amountDecimals);
+      const receipt = await settleTx.wait();
+      const txHash = receipt.hash;
+
+      // 3. Database synchronization call
+      const res = await fetch(`${API_BASE}/api/invoices/${id}/settle`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ txHash })
+      });
+
+      if (!res.ok) {
+        throw new Error('Database settlement sync failed.');
+      }
+
       setInvoices(prev => prev.map(inv => {
         if (inv.id === id) {
           // Adjust top-level available balances and total portfolio values
-          setBalance(prevBal => prevBal - inv.amount);
-          setPortfolioValue(prevVal => prevVal - inv.amount);
-
-          const mockTxHash = `0x${Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')}`;
-          const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-          // Append this cleared item to the settled payments log
-          setPayments(prevPayments => [
-            ...prevPayments,
-            {
-              timestamp: nowStr,
-              invoiceId: inv.id,
-              supplier: inv.supplier,
-              destination: '0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e',
-              amount: inv.amount,
-              fee: '< 0.0001 ETH',
-              txHash: mockTxHash
-            }
-          ]);
+          setBalance(prevBal => Math.max(0, prevBal - inv.amount));
+          setPortfolioValue(prevVal => Math.max(0, prevVal - inv.amount));
 
           // Trigger toast
           setToast({
             show: true,
-            message: `Invoice ${inv.id} ($${inv.amount.toLocaleString()}) successfully settled T+0 via Morph!`,
-            txHash: `${mockTxHash.substring(0, 10)}...${mockTxHash.substring(56)}`
+            message: `Invoice ${inv.id} ($${inv.amount.toLocaleString()}) successfully settled on-chain via MetaMask!`,
+            txHash: `${txHash.substring(0, 10)}...${txHash.substring(56)}`
           });
 
           // Append to dynamic notifications
@@ -227,20 +572,35 @@ export default function DashboardLayout({ setView }) {
             {
               id: `notif-${Date.now()}`,
               title: 'Morph Transaction Cleared',
-              message: `Invoice ${inv.id} ($${inv.amount.toLocaleString()}) successfully settled T+0 via Morph!`,
+              message: `Invoice ${inv.id} ($${inv.amount.toLocaleString()}) successfully settled on-chain via MetaMask!`,
               time: 'Just now',
               read: false,
               type: 'success',
-              meta: `Tx: ${mockTxHash.substring(0, 10)}...${mockTxHash.substring(56)}`
+              meta: `Tx: ${txHash.substring(0, 10)}...${txHash.substring(56)}`
             },
             ...prev
           ]);
 
-          return { ...inv, loading: false, settled: true };
+          return { ...inv, loading: false, settled: true, txHash: txHash };
         }
         return inv;
       }));
-    }, 1200);
+
+      // Background refresh of AI forecasts, user balances, and settled payments
+      fetchPredictions();
+      fetchProfile();
+      fetchPayments();
+
+    } catch (err) {
+      console.error('Error settling invoice on-chain:', err);
+      setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+      
+      setToast({
+        show: true,
+        message: `Settlement failed: ${err.reason || err.message || 'Please check your connection.'}`,
+        txHash: 'Error'
+      });
+    }
   };
 
   // Handle invoice postpone scheduling
@@ -249,51 +609,88 @@ export default function DashboardLayout({ setView }) {
     
     setToast({
       show: true,
-      message: `Invoice ${id} has been scheduled for postponed payment (Jun 2). Runway optimized.`,
+      message: `Invoice ${id} has been scheduled for postponed payment. Runway optimized.`,
       txHash: 'Local Schedule updated'
     });
   };
 
-  // Handle invoice uploading from InvoicesView
-  const handleUploadInvoice = (newInv) => {
-    const nextId = `INV-${String(invoices.length + 1).padStart(3, '0')}`;
-    
-    setInvoices(prev => [
-      ...prev,
-      {
-        id: nextId,
-        supplier: newInv.supplier,
-        amount: newInv.amount,
-        dueDate: newInv.dueDate,
-        aiAction: {
-          status: newInv.status,
-          message: newInv.status === 'safe' ? 'Safe to Pay' : newInv.status === 'delay' ? 'Delay 5 Days' : 'Review Required'
+  // Handle invoice uploading to live Express API
+  const handleUploadInvoice = async (newInv) => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/invoices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        settled: false,
-        scheduled: false,
-        loading: false
+        body: JSON.stringify({
+          supplier: newInv.supplier,
+          amount: newInv.amount,
+          dueDate: newInv.dueDate,
+          aiStatus: newInv.status
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Invoice upload failed.');
       }
-    ]);
 
-    setToast({
-      show: true,
-      message: `Invoice ${nextId} uploaded successfully. AI safety analysis completed.`,
-      txHash: 'Local Upload Registered'
-    });
+      const created = await res.json();
+      
+      setInvoices(prev => [
+        ...prev,
+        {
+          id: created.id,
+          supplier: created.supplier,
+          amount: Number(created.amount),
+          dueDate: created.dueDate,
+          aiAction: {
+            status: created.aiStatus,
+            message: created.aiStatus === 'safe' ? 'Safe to Pay' : created.aiStatus === 'delay' ? 'Delay 5 Days' : 'Review Required',
+            reason: created.aiReason
+          },
+          settled: created.status === 'settled',
+          scheduled: created.status === 'scheduled',
+          loading: false,
+          txHash: created.txHash,
+          supplierWallet: created.supplierWallet
+        }
+      ]);
 
-    // Append to dynamic notifications
-    setNotifications(prev => [
-      {
-        id: `notif-${Date.now()}`,
-        title: 'New Invoice Uploaded',
-        message: `Invoice ${nextId} uploaded successfully. AI safety analysis completed.`,
-        time: 'Just now',
-        read: false,
-        type: 'info',
-        meta: `Supplier: ${newInv.supplier}`
-      },
-      ...prev
-    ]);
+      setToast({
+        show: true,
+        message: `Invoice ${created.id} uploaded successfully. AI safety analysis completed.`,
+        txHash: 'Upload Registered'
+      });
+
+      // Append to dynamic notifications
+      setNotifications(prev => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'New Invoice Uploaded',
+          message: `Invoice ${created.id} uploaded successfully. AI safety analysis completed.`,
+          time: 'Just now',
+          read: false,
+          type: 'info',
+          meta: `Supplier: ${created.supplier}`
+        },
+        ...prev
+      ]);
+
+      // Refresh the runway predictions
+      fetchPredictions();
+
+    } catch (err) {
+      console.error('Error uploading invoice:', err);
+      setToast({
+        show: true,
+        message: `Failed to upload invoice: ${err.message || 'Please check your connection.'}`,
+        txHash: 'Error'
+      });
+    }
   };
 
   // Derived metrics counters
@@ -305,7 +702,7 @@ export default function DashboardLayout({ setView }) {
     <div className="dark h-screen bg-[#070708] flex relative overflow-hidden font-outfit text-white">
       
       {/* 1. Dashboard Sidebar Panel */}
-      <Sidebar setView={setView} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar setView={setView} currentPage={currentPage} setCurrentPage={setCurrentPage} handleLogout={handleLogout} />
 
       {/* 2. Main Workstation Space - styled with premium Figma beveled solid borders */}
       <main 
@@ -347,6 +744,9 @@ export default function DashboardLayout({ setView }) {
           </div>
         )}
 
+        {/* WORKSTATION BLURRED WRAPPER CONTAINER */}
+        <div className={`transition-all duration-700 flex flex-col min-h-full ${!userProfile.walletAddress ? 'blur-md pointer-events-none select-none' : ''}`}>
+
         {/* Workspace Header — collapses on scroll via CSS only (no mount/unmount) */}
         <header className={`px-4 sm:px-8 sticky top-0 z-10 transition-all duration-300 border-b ${
           isHeaderScrolled 
@@ -372,30 +772,49 @@ export default function DashboardLayout({ setView }) {
                   {/* Compact label visible only when collapsed */}
                   <span className={`text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Portfolio</span>
                   <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl'}`}>
-                    ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   {/* Growth badge — collapses */}
                   <span className={`text-[10px] font-bold tracking-wide text-gold-metallic ml-1 whitespace-nowrap hidden xs:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
-                    +$342,158 (12.5%)
+                    +₱19,160,848 (12.5%)
                   </span>
                 </div>
               </div>
 
               <div className={`w-px bg-[#2C2C2C] hidden sm:block transition-all duration-300 ${isHeaderScrolled ? 'h-5' : 'h-10'}`}></div>
 
-              {/* Available balance */}
+              {/* Available balance (Philippine Pesos Bank balance) */}
               <div className="cursor-pointer" onClick={() => setCurrentPage('Dashboard')}>
                 <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
-                  <span className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider whitespace-nowrap">Available Balance</span>
+                  <span className="text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider whitespace-nowrap">Bank Treasury</span>
                   <HelpCircle className="w-3.5 h-3.5 text-[#6a6a6a] cursor-help shrink-0 hidden xs:inline" />
                 </div>
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span className={`text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>Balance</span>
+                  <span className={`text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>PHP</span>
                   <span className={`font-black text-white leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl'}`}>
-                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
+
+              {/* On-Chain USDC Balance (only shown if connected) */}
+              {userProfile.walletAddress && (
+                <>
+                  <div className={`w-px bg-[#2C2C2C] hidden sm:block transition-all duration-300 ${isHeaderScrolled ? 'h-5' : 'h-10'}`}></div>
+                  <div className="cursor-pointer" onClick={() => setCurrentPage('Profile')}>
+                    <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider whitespace-nowrap">On-Chain USDC</span>
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className={`text-[9px] font-bold text-emerald-400 uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>USDC</span>
+                      <span className={`font-black text-emerald-400 leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl font-mono'}`}>
+                        ${walletUSDCBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Inline metrics — fade in when collapsed */}
               <div className={`items-center gap-5 transition-all duration-300 hidden lg:flex ${isHeaderScrolled ? 'opacity-100 max-w-xs' : 'opacity-0 max-w-0 overflow-hidden'}`}>
@@ -419,6 +838,22 @@ export default function DashboardLayout({ setView }) {
 
             {/* Profile block */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative" ref={dropdownRef}>
+
+              {/* Connect Wallet Header Button (only shown if not connected) */}
+              {!userProfile.walletAddress && (
+                <button
+                  onClick={handleConnectWallet}
+                  className={`flex items-center gap-1.5 border border-[#D4AF37]/45 bg-[#D4AF37]/5 hover:bg-[#D4AF37]/12 hover:border-[#D4AF37]/70 active:scale-95 transition-all text-gold-metallic rounded-xl font-bold uppercase tracking-wider text-[10px] cursor-pointer ${
+                    isHeaderScrolled ? 'px-2.5 py-1.5' : 'px-3.5 py-2 sm:py-2.5'
+                  }`}
+                  style={{
+                    boxShadow: '0 2px 10px rgba(212, 175, 55, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.02)'
+                  }}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Connect Wallet</span>
+                </button>
+              )}
               
               {/* Help Button trigger */}
               <button
@@ -549,8 +984,19 @@ export default function DashboardLayout({ setView }) {
                 </div>
                 {/* Name — collapses via CSS */}
                 <div className={`text-left hidden sm:block overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-w-0 opacity-0' : 'max-w-[160px] opacity-100'}`}>
-                  <p className="text-sm font-bold text-white leading-none mb-0.5 whitespace-nowrap">Admin User</p>
-                  <p className="text-[10px] text-[#a1a1a1] leading-none whitespace-nowrap">admin@fehuvia.com</p>
+                  <p className="text-sm font-bold text-white leading-none mb-0.5 whitespace-nowrap">
+                    {userProfile.email.split('@')[0].toUpperCase()}
+                  </p>
+                  <p className="text-[10px] text-[#a1a1a1] leading-none whitespace-nowrap flex items-center gap-1">
+                    {userProfile.walletAddress ? (
+                      <>
+                        <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span className="text-[9px] font-mono text-emerald-400">{userProfile.walletAddress.substring(0, 6)}...{userProfile.walletAddress.substring(38)}</span>
+                      </>
+                    ) : (
+                      userProfile.email
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -584,7 +1030,7 @@ export default function DashboardLayout({ setView }) {
 
             <div className="h-6 w-px bg-[#2C2C2C] hidden md:block"></div>
 
-            {/* Stat: AI status */}
+            {/* Stat: AI Runway */}
             <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 cursor-pointer text-center sm:text-left" onClick={() => setCurrentPage('Analytics')}>
               <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border border-[#2C2C2C] shrink-0"
                    style={{
@@ -594,9 +1040,9 @@ export default function DashboardLayout({ setView }) {
                 <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ade80]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">AI Opt.</p>
+                <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">AI Runway</p>
                 <p className="text-xs sm:text-base font-bold text-white leading-tight truncate">
-                  94% <span className="text-[9px] sm:text-xs text-[#4ade80] font-semibold uppercase tracking-wider hidden xs:inline">Active</span>
+                  {invoices.length > 0 ? `${runway} Days` : '0 Days'} {invoices.length > 0 && <span className="text-[9px] sm:text-xs text-[#4ade80] font-semibold uppercase tracking-wider hidden xs:inline">{trend.toUpperCase()}</span>}
                 </p>
               </div>
             </div>
@@ -615,7 +1061,7 @@ export default function DashboardLayout({ setView }) {
               <div className="min-w-0">
                 <p className="text-[8px] sm:text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider truncate">Settled</p>
                 <p className="text-xs sm:text-base font-bold text-white leading-tight truncate">
-                  1.2d <span className="text-[9px] sm:text-xs text-gold-metallic font-semibold hidden xs:inline">-24%</span>
+                  {payments.length > 0 ? '1.2d' : '0.0d'} {payments.length > 0 && <span className="text-[9px] sm:text-xs text-gold-metallic font-semibold hidden xs:inline">-24%</span>}
                 </p>
               </div>
             </div>
@@ -655,10 +1101,10 @@ export default function DashboardLayout({ setView }) {
               {/* Forecast Area Chart + AI Recommendations Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2">
-                  <CashflowPrediction />
+                  <CashflowPrediction predictions={predictions} balance={balance} />
                 </div>
                 <div>
-                  <AICopilot />
+                  <AICopilot predictions={predictions} />
                 </div>
               </div>
 
@@ -671,7 +1117,7 @@ export default function DashboardLayout({ setView }) {
             </>
           )}
 
-          {currentPage === 'Cash Flow' && <CashFlowView />}
+          {currentPage === 'Cash Flow' && <CashFlowView predictions={predictions} runway={runway} />}
 
           {currentPage === 'Invoices' && (
             <InvoicesView
@@ -684,9 +1130,20 @@ export default function DashboardLayout({ setView }) {
 
           {currentPage === 'Payments' && <PaymentsView payments={payments} />}
 
-          {currentPage === 'Analytics' && <AnalyticsView />}
+          {currentPage === 'Analytics' && <AnalyticsView invoices={invoices} predictions={predictions} />}
 
-          {currentPage === 'Profile' && <ProfileView />}
+          {currentPage === 'Profile' && (
+            <ProfileView 
+              userProfile={userProfile} 
+              handleConnectWallet={handleConnectWallet}
+              handleDisconnectWallet={handleDisconnectWallet}
+              bankLinked={bankLinked}
+              bankName={bankName}
+              bankBalance={balance}
+              onOpenBankLink={() => setIsBankModalOpen(true)}
+              onDisconnectBank={handleDisconnectBank}
+            />
+          )}
 
           {currentPage === 'Notifications' && (
             <NotificationsView 
@@ -698,8 +1155,50 @@ export default function DashboardLayout({ setView }) {
           {currentPage === 'Help' && <HelpView />}
 
         </div>
+        </div>
+
+        {/* WORKSTATION LOCK OVERLAY */}
+        {!userProfile.walletAddress && (
+          <div className="absolute inset-0 z-40 bg-black/55 backdrop-blur-[3px] flex items-center justify-center p-6 animate-fadeIn">
+            <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 md:p-10 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative text-center border border-[#D4AF37]/20 flex flex-col items-center">
+              
+              {/* Pulsing golden shield container */}
+              <div className="h-16 w-16 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic mb-6 animate-pulse">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+
+              <h2 className="font-cormorant text-3xl font-light tracking-wide text-white mb-3 animate-[fadeIn_0.4s_ease-out]">
+                Workstation Gated
+              </h2>
+              <p className="text-white/50 text-xs md:text-sm font-light leading-relaxed mb-8">
+                To safeguard corporate payables, run real-time cash flow predictions, and execute smart stablecoin settlements, Fehuvia requires an active key connection.
+              </p>
+
+              <button
+                onClick={handleConnectWallet}
+                className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4.5 cursor-pointer transform hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_20px_rgba(212,175,55,0.25)] flex items-center justify-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Connect MetaMask Wallet
+              </button>
+
+              <p className="text-[10px] text-white/30 font-light mt-6 flex items-center gap-1.5 justify-center">
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-600 animate-pulse"></span>
+                Status: Awaiting Morph L2 Key Link
+              </p>
+            </div>
+          </div>
+        )}
         
       </main>
+      <DemoDisclaimer compact />
+      
+      {/* simulated Philippine Brankas Open Banking Modal */}
+      <BrankasLinkModal 
+        isOpen={isBankModalOpen}
+        onClose={() => setIsBankModalOpen(false)}
+        onLinkSuccess={handleLinkBankSuccess}
+      />
     </div>
   );
 }

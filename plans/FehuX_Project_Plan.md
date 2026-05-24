@@ -1,52 +1,105 @@
 # Fehuvia: The Web3 SME Payment Portal & AI Cashflow Co-Pilot
 
-**The Pitch:** I am building Fehuvia, a payment portal that acts as a financial co-pilot for SMEs. It uses an AI agent to predict my 30-day cash flow based on historical B2B invoices, advising me on what to pay and when. Once approved, it executes the settlement instantly using stablecoins on the Morph network, eliminating 3-day banking delays and the reactive nature of traditional corporate banking.
+## Executive Summary & Pitch
+SMEs in the Philippines and Southeast Asia face a silent treasury killer: cash flow crunches exacerbated by 3-day traditional corporate bank settlement delays, high transaction fees, and reactive financial planning. 
 
-## Official Project Write-Up (Strictly Under 200 Words)
-SMEs in the Philippines face a silent killer: cash flow crunches exacerbated by 3-day corporate bank settlement delays and high payment gateway fees. Fehuvia is a Web3 financial co-pilot designed to give small businesses the treasury tools big banks take for granted.
+**Fehuvia** is a premium Web3 financial co-pilot designed to give small businesses the treasury tools big banks take for granted. By combining **AI-driven predictive analysis** with **Morph L2 instant stablecoin settlements**, Fehuvia transforms reactive accounting into proactive, borderless wealth management.
 
-Using the Morph network for T+0 stablecoin settlements, Fehuvia eliminates B2B payment friction. But we go further than just fast rails. We integrated an OpenAI-powered Cashflow Co-Pilot that analyzes historical invoice data to proactively predict 30-day liquidity. Instead of just showing past expenses, Fehuvia acts as an automated CFO, classifying pending invoices into "Safe to Pay" or "Delay" to prevent cash exhaustion.
+---
 
-When an invoice is approved, our smart contracts execute the instant transfer of ERC-20 stablecoins directly to the supplier on Morph. By combining AI predictive analysis with Morph’s low-cost, decentralized settlement layer, Fehuvia transforms reactive accounting into proactive, borderless wealth management for SEA’s vital SME sector.
+## 🏗️ System Architecture & Data Flow
 
-## Design Concept & Color Scheme
-* **Theme:** "Premium Intelligence." Designed to feel like an elite wealth management tool.
-* **Color Palette:** Deep Black and Metallic Gold. Matte black containers, vibrant gold accents for execution buttons/charts, and stark white typography.
+Fehuvia's architecture is divided into three core layers: a responsive, high-performance frontend; a secure, event-driven Node.js backend; and instant, low-cost decentralized smart contracts on the Morph L2 network.
 
-## The Locked-In Tech Stack
-* **Smart Contracts:** Solidity (Deployed on Morph Testnet).
-* **Frontend Dashboard:** React + Tailwind CSS.
-* **Backend API:** Node.js / Express.
-* **The AI Co-Pilot:** OpenAI API (GPT-4o) with a RAG system for context-aware JSON cashflow predictions.
-* **Web3 Integration:** Ethers.js and Wagmi/RainbowKit.
-* **Tokens:** Mock ERC-20 stablecoin (e.g., test USDC) on Morph.
+### Architectural Diagram
+```mermaid
+graph TD
+    %% Styling
+    classDef frontend fill:#111,stroke:#D4AF37,stroke-width:2px,color:#fff;
+    classDef backend fill:#1a1a1a,stroke:#a1a1a1,stroke-width:2px,color:#fff;
+    classDef blockchain fill:#0d0d0f,stroke:#fb923c,stroke-width:2px,color:#fff;
+    classDef ai fill:#0a0a0c,stroke:#4ade80,stroke-width:2px,color:#fff;
 
-## The Architecture & Data Flow (Diagram Required for Bonus Points)
-*To be drafted in draw.io or Excalidraw:*
-1. **Node.js Backend** stores B2B invoice data -> retrieves relevant context through **RAG** -> sends the prompt to **OpenAI API**.
-2. **OpenAI API** returns predictive 30-day JSON cashflow & action tags ("Safe to Pay") using retrieved invoice/context data.
-3. **React Frontend** visualizes data on the Black/Gold dashboard.
-4. User clicks "Settle" -> **Web3 Wallet (Ethers.js)** signs transaction.
-5. **Morph Testnet Smart Contract** instantly settles ERC-20 stablecoins to supplier.
-6. Contract emits `PaymentSettled` -> Backend updates the invoice history and retrieval index for the RAG layer.
+    %% Nodes
+    F["React Dashboard - Vercel"]:::frontend
+    B["Node.js Express API - Render"]:::backend
+    DB["PostgreSQL Database - Supabase or Render"]:::backend
+    OpenAI["OpenAI GPT-4o API - RAG Co-Pilot"]:::ai
+    Morph["Morph L2 Testnet - Blockchain"]:::blockchain
+    SC["B2BSettlement.sol - Smart Contract"]:::blockchain
+    MToken["MockUSDC.sol - ERC-20 Token"]:::blockchain
 
-## The Hackathon Sprint Plan (May 18 – May 29)
+    %% Connections & Flow
+    F -->|1. Request Invoices & Prediction| B
+    B -->|2. Query Invoices & Context| DB
+    B -->|3. Feed Data & RAG Context| OpenAI
+    OpenAI -->|4. Return 30-Day Forecast JSON| B
+    B -->|5. Deliver Cashflow Analysis| F
+    F -->|6. Initiate Instant Settlement| Morph
+    Morph -->|7. Transfer Stablecoins| SC
+    SC -->|8. Emit PaymentSettled Event| Morph
+    B -->|9. Listen for PaymentSettled| SC
+    B -->|10. Update Invoice State & RAG| DB
+```
 
-**Days 1-2: The Foundation (Smart Contracts & AI)**
-* Claim testnet ETH from the Morph Hoodi Faucet.
-* Write and deploy the B2B settlement smart contract and ERC-20 token to the Morph Testnet.
-* *Community Requirement:* **Build Diary Post 1 on X:** "Just deployed our B2B settlement contracts on the @MorphNetwork testnet! Fixing SME cashflow in the PH one block at a time. #MorphBuildSprint #MorphBuildPH"
+### The 10-Step Operational Flow
+1. **Request Predictions:** The buyer accesses the React dashboard. The frontend requests the latest invoice ledger and cashflow forecasts from the backend.
+2. **Context Retrieval:** The backend queries the invoice history and company profiles from the PostgreSQL database.
+3. **AI Co-Pilot Processing:** The backend feeds the raw transaction history and a context-aware system prompt into the OpenAI API (GPT-4o) via RAG.
+4. **Decision Engine:** The AI returns a structured JSON payload containing 30-day runway predictions and classifies each pending invoice as:
+   * `"Safe to Pay"` (cash buffers are healthy).
+   * `"Delay"` (high risk of upcoming cash crunch).
+   * `"Review"` (unusual activity or tight margin).
+5. **Dashboard Render:** The React frontend receives the prediction and renders interactive charts and actionable buttons on the matte-black/gold interface.
+6. **Instant Web3 Settle:** Clicking "Settle via Morph" on a `"Safe to Pay"` invoice prompts the user's Web3 wallet (e.g., MetaMask, Rabby) to sign a transaction.
+7. **On-Chain Execution:** The smart contract pulls `MockUSDC` from the buyer’s wallet and instantly sends it to the supplier's address on the Morph L2 network.
+8. **Event Emission:** Upon successful transfer, the `B2BSettlement` contract emits a `PaymentSettled` event.
+9. **Event Listener Capture:** The backend’s daemon process (listening to the Morph L2 network via a WebSocket/RPC node connection) intercepts the event.
+10. **State Reconciliation:** The backend marks the invoice as `settled` in the database, updates the RAG context layer, and the frontend dashboard automatically syncs to display "Cleared T+0".
 
-**Days 3-4: The Interface (Backend & React)**
-* Build the Node.js API routes, RAG retrieval pipeline, and OpenAI system prompt.
-* Build the React UI (Black and Gold theme). 
-* *Community Requirement:* **Build Diary Post 2 on X:** "UI is coming together! Fehuvia isn't just an accounting app; our AI Co-Pilot acts as an automated CFO. Dropping a sneak peek of the dashboard. #MorphBuildSprint #MorphBuildPH"
+---
 
-**Day 5-6: Web3 Integration & The Architecture Diagram**
-* Connect React frontend to Morph smart contracts using Ethers.js. Test end-to-end loops.
-* Map out the Architecture Diagram to secure the judge's bonus points. 
+## 🛠️ The Technology Stack & Deployment Blueprint
 
-**Day 7-8: The Demo Video & Submission Polish**
-* Record the required 2-minute video (30s PH cashflow problem -> 1m live demo of AI prediction + Morph settlement -> 30s future plans).
-* *Community Requirement:* **Build Diary Post 3 on X:** "It’s alive! 🚀 Fehuvia is officially submitted for the Build In! Payments hackathon. Check out our AI predicting cashflow and Morph handling the instant Web3 settlement. [Link to Demo Video] #MorphBuildSprint #MorphBuildPH"
-* Finalize GitHub public repo, ensure Vercel live demo works without paywalls.
+| Component | Technical Framework | Deployment Platform | Rationale for Selection |
+| :--- | :--- | :--- | :--- |
+| **Frontend** | **React (Vite)**<br>• Tailwind CSS<br>• Lucide React Icons<br>• Recharts (analytics) | **Vercel** | • Lightning-fast global Edge network.<br>• Automated Git integration for continuous integration.<br>• Secure environment variable injection for API routing. |
+| **Backend API & Daemon** | **Node.js + Express**<br>• Ethers.js / Viem (Web3)<br>• OpenAI Node SDK | **Render (Web Service)** | • Native, persistent process execution required for the background blockchain event listeners.<br>• Automatic SSL certificates.<br>• High availability with simple horizontal scaling. |
+| **Database** | **PostgreSQL**<br>• `pgvector` extension for future vector embeddings. | **Supabase** or **Render Postgres** | • Structured relational storage for highly connected invoice tables.<br>• Fast vector indexing capabilities for localized RAG lookup. |
+| **Smart Contracts** | **Solidity (0.8.24)**<br>• Hardhat compilation & scripts<br>• OpenZeppelin ERC20 | **Morph L2 Testnet** | • **Morph Network:** Layer 2 EVM with sub-cent gas fees and near-instant transaction finality.<br>• Hardhat CLI scripts will be used to deploy directly via the Morph Testnet RPC node. |
+| **Wallet Integration** | **Wagmi / Viem**<br>• RainbowKit UI Components | Direct Integration | • Premium, native Web3 modal connection UI.<br>• Excellent state management for contract read/write actions. |
+
+---
+
+## 🔒 Security & Environment Configuration
+
+### Key Management
+* **User Wallet Keys:** Never touched or stored by the application. Transactions are initiated on the client side and signed locally inside the user's Web3 wallet (MetaMask, Rainbow, etc.).
+* **Deployment Wallet Keys:** The private key used to deploy contracts to the Morph Testnet is stored exclusively in a local `.env` file on the developer's machine (which is ignored by Git).
+* **API Access Keys:** OpenAI keys and database connection strings are stored securely in Vercel's and Render's environment dashboards.
+
+---
+
+## 🎯 The Hackathon Sprint Plan (Remaining Deliverables)
+
+### Phase 1: Smart Contracts & Web3 Base (Days 1–2)
+* [ ] Write `MockUSDC.sol` (ERC-20 standard stablecoin with a public minting/faucet handler).
+* [ ] Write `B2BSettlement.sol` (Handles invoice verification, stablecoin settlement, and emits the `PaymentSettled` event).
+* [ ] Test locally using Hardhat Network.
+* [ ] Deploy to **Morph Testnet** and verify contracts on the Morph Block Explorer.
+
+### Phase 2: Express Backend & AI Co-Pilot (Days 3–4)
+* [ ] Set up PostgreSQL schema (Invoices, Users, Suppliers).
+* [ ] Build Express REST API routes for invoice CRUD operations.
+* [ ] Configure RAG context builder and system prompts with the OpenAI GPT-4o API.
+* [ ] Implement the `ethers.js` event listener daemon to parse `PaymentSettled` logs from the Morph Testnet.
+
+### Phase 3: Frontend Connect & End-to-End Testing (Days 5–6)
+* [ ] Replace mockup frontend states with actual `fetch` requests targeting the Render backend.
+* [ ] Hook up RainbowKit / Wagmi inside the dashboard to initiate actual Morph stablecoin settlements.
+* [ ] Map out the final architecture diagram in premium SVG for the project repository.
+
+### Phase 4: Polish & Submission (Days 7–8)
+* [ ] Deploy Frontend to **Vercel** and Backend to **Render**.
+* [ ] Conduct end-to-end integration testing (e.g., creating an invoice -> viewing the AI forecast -> settling it via wallet -> verifying automatic status update).
+* [ ] Record the 2-minute project demo video and finalize the readme.

@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
-import { User, Wallet, Shield, Key, Sliders, CheckCircle2, Copy, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { User, Wallet, Shield, Key, Sliders, CheckCircle2, Copy, ToggleLeft, ToggleRight, Sparkles, Landmark } from 'lucide-react';
 
-export function ProfileView() {
-  const [walletConnected, setWalletConnected] = useState(true);
+export function ProfileView({ 
+  userProfile = {}, 
+  handleConnectWallet, 
+  handleDisconnectWallet,
+  bankLinked = false,
+  bankName = '',
+  bankBalance = 0,
+  onOpenBankLink,
+  onDisconnectBank
+}) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [riskTolerance, setRiskTolerance] = useState(65); // percentage slider
 
@@ -23,13 +31,18 @@ export function ProfileView() {
     setTimeout(() => setCopiedKey(false), 2000);
   };
 
+  const userEmail = userProfile.email || 'admin@fehuvia.com';
+  const username = userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ' User';
+  const isConnected = !!userProfile.walletAddress;
+  const walletAddress = userProfile.walletAddress || 'Not Connected';
+
   return (
     <div className="space-y-8 animate-fadeIn font-outfit text-white">
       
       {/* Header bar */}
       <div>
         <h2 className="text-xl font-semibold mb-1"
-            style={{ textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3)' }}>
+             style={{ textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3)' }}>
           Profile & Workstation Settings
         </h2>
         <p className="text-sm text-[#a1a1a1]">Configure Web3 settlement rails, API connections, and AI Copilot configurations</p>
@@ -40,6 +53,55 @@ export function ProfileView() {
         
         {/* Left Side: General Profile + Wallet connection (Col span 2) */}
         <div className="lg:col-span-2 space-y-6">
+
+          {/* SECTION A: Philippine Bank Connection Plate */}
+          <div className="plate-black-metallic shape-asymmetric-3 p-6 border border-[#2C2C2C]">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 rounded bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic">
+                <Landmark className="w-4 h-4" />
+              </div>
+              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">Philippine Banking Connection</h3>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className={`h-2 w-2 rounded-full ${bankLinked ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`}></span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${bankLinked ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                    {bankLinked ? `Brankas Active: ${bankName}` : 'No Traditional Bank Linked'}
+                  </span>
+                </div>
+                
+                {bankLinked ? (
+                  <div>
+                    <p className="text-lg font-bold text-white leading-none">
+                      ₱{bankBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP
+                    </p>
+                    <div className="flex items-center gap-4 mt-2">
+                      <span className="text-xs text-white/40">Open Finance Channel: <strong className="text-white/60">Brankas Secure API</strong></span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-white/40 leading-relaxed">
+                      Link your BDO, BPI, or UnionBank corporate account to power traditional cash flow forecasts.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={bankLinked ? onDisconnectBank : onOpenBankLink}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  bankLinked
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
+                    : 'bg-gold-metallic text-black hover:scale-[1.01]'
+                }`}
+              >
+                {bankLinked ? 'Disconnect Bank' : 'Link Bank Account'}
+              </button>
+            </div>
+          </div>
           
           {/* Section 1: Connected Wallet Plate */}
           <div className="plate-black-metallic shape-asymmetric-1 p-6 border border-[#2C2C2C]">
@@ -53,25 +115,33 @@ export function ProfileView() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl">
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Morph Testnet Connected</span>
+                  <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`}></span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                    {isConnected ? 'Morph Testnet Connected' : 'Morph Testnet Disconnected'}
+                  </span>
                 </div>
-                <p className="text-xs sm:text-sm font-mono text-white/80 select-all break-all leading-relaxed">0x9d3fB7A215E9f1165A98C72B9eB4d693fE3eA23e</p>
-                <div className="flex items-center gap-4 mt-2">
-                  <span className="text-xs text-white/40">Network: <strong className="text-white/60">Morph L2</strong></span>
-                  <span className="text-xs text-white/40">Gas Token: <strong className="text-white/60">ETH</strong></span>
-                </div>
+                <p className={`text-xs sm:text-sm font-mono select-all break-all leading-relaxed ${isConnected ? 'text-white/80' : 'text-white/40'}`}>
+                  {isConnected ? walletAddress : 'No EVM settlement wallet connected.'}
+                </p>
+                {isConnected ? (
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className="text-xs text-white/40">Network: <strong className="text-white/60">Morph L2</strong></span>
+                    <span className="text-xs text-white/40">Gas Token: <strong className="text-white/60">ETH</strong></span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-white/30 mt-1">Please connect your MetaMask wallet to execute settlements on-chain.</p>
+                )}
               </div>
 
               <button
-                onClick={() => setWalletConnected(!walletConnected)}
+                onClick={isConnected ? handleDisconnectWallet : handleConnectWallet}
                 className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  walletConnected
+                  isConnected
                     ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
                     : 'bg-gold-metallic text-black hover:scale-[1.01]'
                 }`}
               >
-                {walletConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
+                {isConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
               </button>
             </div>
           </div>
@@ -91,7 +161,7 @@ export function ProfileView() {
                 <input
                   type="text"
                   readOnly
-                  value="Admin User"
+                  value={username}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/60 focus:outline-none cursor-not-allowed font-light text-sm"
                 />
               </div>
@@ -100,7 +170,7 @@ export function ProfileView() {
                 <input
                   type="email"
                   readOnly
-                  value="admin@fehuvia.com"
+                  value={userEmail}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/60 focus:outline-none cursor-not-allowed font-light text-sm"
                 />
               </div>

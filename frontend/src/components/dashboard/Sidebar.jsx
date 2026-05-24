@@ -2,7 +2,7 @@ import React from 'react';
 import { LayoutDashboard, FileText, TrendingUp, Settings, Wallet, BarChart3, Bell, HelpCircle, LogOut } from 'lucide-react';
 import logoGold from '../../assets/images/logo-plain-gold.png';
 
-export function Sidebar({ setView, currentPage, setCurrentPage }) {
+export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) {
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard' },
     { icon: TrendingUp, label: 'Cash Flow' },
@@ -133,12 +133,12 @@ export function Sidebar({ setView, currentPage, setCurrentPage }) {
 
           {/* Exit Sign Out button */}
           <button
-            onClick={() => setView('landing')}
+            onClick={handleLogout || (() => setView('landing'))}
             className="group relative flex items-center justify-center w-12 h-12 rounded-xl transition-all hover:bg-red-500/10 cursor-pointer"
           >
             <LogOut className="w-5 h-5 text-red-400 hover:text-red-300 transition-colors" />
             <div className="absolute left-full ml-4 px-3 py-2 bg-[#161618] text-white text-xs rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-[#2C2C2C] shadow-2xl">
-              Exit to Landing
+              Sign Out
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#161618]"></div>
             </div>
           </button>

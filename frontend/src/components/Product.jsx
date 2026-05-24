@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Sparkles, TrendingUp, AlertTriangle, FileText, Clock, CheckCircle } from 'lucide-react';
+import CountUp from './CountUp';
 
 const chartData = [
   { id: 1, day: 'Day 1', predicted: 2400000 },
@@ -12,7 +13,7 @@ const chartData = [
   { id: 7, day: 'Day 30', predicted: 3100000 },
 ];
 
-export default function Product() {
+export default function Product({ productRef, isVisible }) {
   // Mini Dashboard Interactive States (matches Figma figures!)
   const [balance, setBalance] = useState(1289401.07);
   const [invoices, setInvoices] = useState([
@@ -59,16 +60,17 @@ export default function Product() {
   return (
     <section
       id="workflow"
+      ref={productRef}
       className="relative z-10 px-8 md:px-16 py-12 md:py-16 min-h-[100svh] snap-start flex flex-col justify-center overflow-hidden font-outfit"
       style={{
         backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.94), rgba(8, 8, 8, 0.98)), radial-gradient(circle at top right, rgba(228, 195, 122, 0.08), transparent 30%), radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.03), transparent 25%)',
       }}
     >
-      <div className="max-w-[1400px] mx-auto w-full relative z-10 flex flex-col justify-center">
+      <div className={`max-w-[1400px] mx-auto w-full relative z-10 flex flex-col justify-center transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
         
         {/* Section Header - Kept compact */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-6">
-          <div className="max-w-2xl">
+          <div className={`max-w-2xl transition-all duration-700 delay-100 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             <span className="text-[#e4c37a] text-xs font-bold tracking-[0.3em] uppercase drop-shadow-[0_0_10px_rgba(228,195,122,0.3)] block mb-1.5">
               The Platform
             </span>
@@ -76,13 +78,13 @@ export default function Product() {
               An interface defined by <span className="italic text-gold-metallic">decisive execution</span>.
             </h2>
           </div>
-          <p className="max-w-xl text-white/50 leading-relaxed text-sm font-light">
+          <p className={`max-w-xl text-white/50 leading-relaxed text-sm font-light transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             Fehuvia's interface synthesizes complicated multi-currency cash flows into a single, actionable dashboard. Experience the live interactive preview below.
           </p>
         </div>
 
         {/* Dashboard Workstation Frame: Black Metallic Plate with Massive Asymmetrical Corners */}
-        <div className="plate-black-metallic shape-asymmetric-1 p-5 md:p-6 relative w-full overflow-hidden">
+        <div className={`plate-black-metallic shape-asymmetric-1 p-5 md:p-6 relative w-full overflow-hidden transition-all duration-1000 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           {/* Subtle Background Textures */}
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.015)_0%,rgba(255,255,255,0)_50%)] pointer-events-none" />
           <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.005)_0px,rgba(255,255,255,0.005)_1px,transparent_1px,transparent_12px)] opacity-10 mix-blend-overlay pointer-events-none" />
@@ -93,14 +95,12 @@ export default function Product() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-white/5 pb-4 mb-4">
               
               {/* Stat 1: Wallet Treasury */}
-              <div className="flex flex-col space-y-1">
+              <div className={`flex flex-col space-y-1 transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
                 <span className="text-white/40 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
                   Portfolio Value
                 </span>
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                    $2,847,392.00
-                  </span>
+                  <CountUp value={2847392} prefix="$" decimals={2} active={isVisible} className="text-2xl md:text-3xl font-extrabold text-white tracking-tight" />
                   <span className="text-gold-metallic text-xs font-bold tracking-wide">
                     +12.5%
                   </span>
@@ -108,14 +108,12 @@ export default function Product() {
               </div>
 
               {/* Stat 2: Available balance */}
-              <div className="flex flex-col space-y-1">
+              <div className={`flex flex-col space-y-1 transition-all duration-700 delay-400 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
                 <span className="text-white/40 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
                   Available Balance
                 </span>
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                  <CountUp value={balance} prefix="$" decimals={2} active={isVisible} className="text-2xl md:text-3xl font-extrabold text-white tracking-tight" />
                   <span className="text-white/30 text-xs font-medium">
                     45.3% of total
                   </span>
@@ -123,16 +121,16 @@ export default function Product() {
               </div>
 
               {/* Stat 3: Active Obligations */}
-              <div className="flex flex-col space-y-1">
+              <div className={`flex flex-col space-y-1 transition-all duration-700 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
                 <span className="text-white/40 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
                   Pending Payables Queue
                 </span>
                 <div className="flex items-baseline space-x-2">
                   <span className="text-2xl md:text-3xl font-extrabold text-gold-metallic tracking-tight">
-                    {pendingCount} Invoices
+                    <CountUp value={pendingCount} active={isVisible} /> Invoices
                   </span>
                   <span className="text-white/30 text-xs font-semibold">
-                    (${pendingTotal.toLocaleString()})
+                    (<CountUp value={pendingTotal} prefix="$" decimals={0} active={isVisible} />)
                   </span>
                 </div>
               </div>
@@ -143,7 +141,7 @@ export default function Product() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
               {/* Left Column: Cashflow predict area chart & invoice table */}
-              <div className="lg:col-span-8 space-y-4">
+              <div className={`lg:col-span-8 space-y-4 transition-all duration-700 delay-400 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
                 
                 {/* Embedded dynamic Recharts Line Graph - Enlarged chart title and scales */}
                 <div className="plate-black-metallic shape-asymmetric-3 p-4 border border-white/5 relative">
@@ -239,7 +237,7 @@ export default function Product() {
               </div>
 
               {/* Right Column: Mini AI strategically advice list - Enlarged insight descriptions slightly */}
-              <div className="lg:col-span-4 h-full">
+              <div className={`lg:col-span-4 h-full transition-all duration-700 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
                 
                 <div className="plate-black-metallic shape-asymmetric-4 p-4 border border-white/5 flex flex-col justify-between min-h-[230px] lg:h-[362px]">
                   <div>

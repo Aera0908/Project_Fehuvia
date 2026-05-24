@@ -2,7 +2,7 @@ import React from 'react';
 import heroImg from '../assets/images/hero-runestone.png';
 import bgImg from '../assets/images/metallic-black-background.jpeg';
 
-export default function Hero({ heroRef, setModalType, setView }) {
+export default function Hero({ heroRef, isVisible, setModalType, setView }) {
   return (
     <main
       id="top"
@@ -21,7 +21,7 @@ export default function Hero({ heroRef, setModalType, setView }) {
       <div className="max-w-[1400px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center relative z-10">
         
         {/* Left Side: signature Runestone with Floating Visual Elements */}
-        <div className="hidden md:flex relative justify-center items-center h-full min-h-[450px]">
+        <div className={`hidden md:flex relative justify-center items-center h-full min-h-[450px] transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           {/* Subtle Glowing Background Aura */}
           <div className="absolute w-[350px] h-[350px] rounded-full bg-[#bf953f] opacity-[0.06] blur-[90px] pointer-events-none" />
           
@@ -60,9 +60,9 @@ export default function Hero({ heroRef, setModalType, setView }) {
         </div>
 
         {/* Right Side: Title, Subtitle, and CTAs */}
-        <div className="flex flex-col space-y-8 pl-0 md:pl-10 items-center md:items-start text-center md:text-left mt-6 md:mt-0 animate-fadeIn">
+        <div className={`flex flex-col space-y-8 pl-0 md:pl-10 items-center md:items-start text-center md:text-left mt-6 md:mt-0 transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           
-          <div className="flex items-center space-x-3">
+          <div className={`flex items-center space-x-3 transition-all duration-700 delay-100 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             <div className="h-1.5 w-1.5 rounded-full bg-[#bf953f] animate-pulse" />
             <p className="text-[#e4c37a] text-[10px] md:text-xs font-bold tracking-[0.25em] uppercase font-outfit">
               AUTOMATE LIQUIDITY & B2B OPERATIONS
@@ -70,7 +70,7 @@ export default function Hero({ heroRef, setModalType, setView }) {
           </div>
 
           {/* Premium Dual Typography Title */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-normal leading-[1.1] tracking-tight text-center md:text-left">
+          <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-normal leading-[1.1] tracking-tight text-center md:text-left transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             <span className="font-cormorant text-5xl sm:text-6xl lg:text-7xl font-light italic block text-silver-metallic mb-1">
               Predictive Cashflow.
             </span>
@@ -79,12 +79,12 @@ export default function Hero({ heroRef, setModalType, setView }) {
             </span>
           </h1>
 
-          <p className="text-white/70 text-base md:text-lg max-w-xl leading-relaxed font-light mx-auto md:mx-0 font-outfit">
+          <p className={`text-white/70 text-base md:text-lg max-w-xl leading-relaxed font-light mx-auto md:mx-0 font-outfit transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             Forecast your global 30-day runway with an AI treasury co-pilot and settle B2B invoice obligations instantly using stablecoins on the Morph network. Bypass traditional bank clearing delays.
           </p>
 
           {/* Luxury Action Buttons */}
-          <div className="flex flex-wrap gap-5 pt-3 justify-center md:justify-start w-full">
+          <div className={`flex flex-wrap gap-5 pt-3 justify-center md:justify-start w-full transition-all duration-700 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
             <button
               onClick={() => setModalType('signup')}
               className="bg-gold-metallic text-black font-bold uppercase tracking-wider text-xs rounded-full px-8 py-4 transition-all duration-300 shadow-[0_4px_25px_rgba(228,195,122,0.25)] hover:shadow-[0_8px_35px_rgba(228,195,122,0.45)] transform hover:-translate-y-0.5 cursor-pointer font-outfit"

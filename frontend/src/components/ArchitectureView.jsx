@@ -14,6 +14,7 @@ import {
   ArrowDown,
   Info
 } from 'lucide-react';
+import DemoDisclaimer from './DemoDisclaimer';
 
 export default function ArchitectureView({ onClose, setView }) {
   const [selectedBlock, setSelectedBlock] = useState('invoice-ledger');
@@ -323,6 +324,8 @@ export default function ArchitectureView({ onClose, setView }) {
       <footer className="relative z-10 border-t border-white/5 bg-[#030304]/60 py-6 text-center text-[10px] text-white/35 tracking-widest uppercase font-sans">
         <p>&copy; {new Date().getFullYear()} GEC5 - Fehuvia. Verified Security Standard.</p>
       </footer>
+
+      <DemoDisclaimer />
 
     </div>
   );

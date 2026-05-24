@@ -41,6 +41,24 @@ export default function Navbar({
           >
             Features
           </a>
+          <a
+            href="#roadmap"
+            className="text-white/70 hover:text-[#e4c37a] hover:gold-glow transition-all duration-300 relative py-2 after:absolute after:bottom-0 after:left-0 after:h-[1px] after:w-0 after:bg-[#e4c37a] hover:after:w-full after:transition-all after:duration-300"
+          >
+            Roadmap
+          </a>
+          <a
+            href="#faq"
+            className="text-white/70 hover:text-[#e4c37a] hover:gold-glow transition-all duration-300 relative py-2 after:absolute after:bottom-0 after:left-0 after:h-[1px] after:w-0 after:bg-[#e4c37a] hover:after:w-full after:transition-all after:duration-300"
+          >
+            FAQ
+          </a>
+          <a
+            href="#contact"
+            className="text-white/70 hover:text-[#e4c37a] hover:gold-glow transition-all duration-300 relative py-2 after:absolute after:bottom-0 after:left-0 after:h-[1px] after:w-0 after:bg-[#e4c37a] hover:after:w-full after:transition-all after:duration-300"
+          >
+            Contact
+          </a>
           
           <button
             onClick={() => setModalType('signup')}
@@ -90,6 +108,27 @@ export default function Navbar({
             onClick={() => setIsMobileMenuOpen(false)}
           >
             Features
+          </a>
+          <a
+            href="#roadmap"
+            className="text-lg font-medium tracking-wide hover:text-[#e4c37a] transition-colors border-b border-white/5 pb-2"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            Roadmap
+          </a>
+          <a
+            href="#faq"
+            className="text-lg font-medium tracking-wide hover:text-[#e4c37a] transition-colors border-b border-white/5 pb-2"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            FAQ
+          </a>
+          <a
+            href="#contact"
+            className="text-lg font-medium tracking-wide hover:text-[#e4c37a] transition-colors border-b border-white/5 pb-2"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            Contact
           </a>
           <button
             onClick={() => {
