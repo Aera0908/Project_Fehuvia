@@ -1,13 +1,15 @@
 import React from 'react';
-import { LayoutDashboard, FileText, TrendingUp, Settings, Wallet, BarChart3, Bell, HelpCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, TrendingUp, Settings, Wallet, BarChart3, Bell, HelpCircle, LogOut, ArrowLeftRight, Landmark } from 'lucide-react';
 import logoGold from '../../assets/images/logo-plain-gold.png';
 
 export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) {
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard' },
+    { icon: Landmark, label: 'Treasury' },
     { icon: TrendingUp, label: 'Cash Flow' },
     { icon: FileText, label: 'Invoices' },
     { icon: Wallet, label: 'Payments' },
+    { icon: ArrowLeftRight, label: 'Bridge' },
     { icon: BarChart3, label: 'Analytics' },
   ];
 

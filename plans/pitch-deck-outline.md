@@ -1,75 +1,93 @@
-# Project Fehux - Pitch Deck Outline
+# Fehuvia - B2B SME Treasury Workstation & AI Cashflow Co-Pilot
+## Investor Pitch Deck Outline
 
-Based on the project structure (which includes `B2BSettlement.sol` and `MockUSDC.sol`), this pitch deck is tailored for a Web3 B2B settlement solution leveraging stablecoins.
+This deck is custom-tailored for Fehuvia: the ultimate unified Web3 settlement portal and open finance treasury workstation built for Southeast Asian Small and Medium Enterprises (SMEs).
 
 ---
 
-## Slide 1: Title Slide
-* **Project Name:** Project Fehux / Fehuvia (Finalize name)
-* **Tagline:** A clear, one-sentence summary of what you do. *(e.g., "Instant, low-cost B2B cross-border settlement powered by blockchain.")*
-* **Date & Presenter:** Your name, title, and the date.
-* **Logo:** Your project logo.
+## Slide 1: Title Slide & Hook
+* **Project Name**: Fehuvia
+* **Visual**: Premium black-and-gold aesthetic showcasing the black metallic titanium treasury card deck.
+* **Tagline**: The AI-Driven Treasury Workstation & Instant Stablecoin Settlement Portal for Southeast Asian SMEs.
+* **Core Hook**: Unleashing SME working capital by bridging traditional local bank accounts with Morph L2 Web3 settlement rails.
 
-## Slide 2: The Problem
-* **Current State:** Traditional B2B payments (especially cross-border) are slow (T+2 to T+5 days), expensive (SWIFT fees, FX margins), and opaque.
-* **Pain Points for Businesses:** Tied-up working capital, lack of real-time visibility, complex reconciliation, high transaction costs.
-* **Why Now?** The need for capital efficiency and global reach is higher than ever, and current rails are outdated.
+---
 
-## Slide 3: The Solution
-* **What is it?** A decentralized settlement protocol built on smart contracts.
-* **How it solves the problem:** 
-    * **Speed:** Instant settlement using stablecoins (like USDC).
-    * **Cost:** Fractions of a cent compared to traditional banking fees.
-    * **Transparency:** Immutable ledger for easy auditing and automated reconciliation.
-* **Core Value Proposition:** Freeing up working capital and eliminating friction in B2B commerce.
+## Slide 2: The Problem (The Silent Treasury Killer)
+* **The SME Cash Crunch**: SMEs in the Philippines and SEA lose billions in working capital efficiency due to:
+  * **T+3 Settlement Latency**: Legacy local payment rails (check clearings, manual bank wires) tie up funds for days.
+  * **Fragmented Operating Balances**: Executives manage cash split across BDO, BPI, UnionBank, GCash, and Maya with zero unified real-time visibility.
+  * **Reactive Financial Planning**: Cashflow forecasting is done manually on spreadsheets, leading to late invoice payments and runway surprises.
 
-## Slide 4: Product / How It Works
-* **The Flow:** Visual diagram showing a business creating an invoice -> counterparty paying via the platform -> instant `B2BSettlement.sol` execution -> funds deposited in USDC.
-* **Key Features:**
-    * Smart contract-based escrow/settlement.
-    * Stablecoin integration (eliminating volatility).
-    * API integration for existing ERPs (if applicable).
-* **Demo/Screenshots:** (If you have a frontend or terminal demo, show a screenshot here).
+---
 
-## Slide 5: Market Opportunity
-* **Total Addressable Market (TAM):** The global B2B payments market size (multi-trillion dollar industry).
-* **Serviceable Addressable Market (SAM):** Specific regions or industries you are targeting first.
-* **Serviceable Obtainable Market (SOM):** Realistic target capture in the next 1-3 years.
+## Slide 3: The Solution (Fehuvia's Unified Workstation)
+* **A Single Dashboard for All Corporate Funds**: 
+  * **Consolidated Treasury Ledger**: Aggregating traditional bank accounts and digital e-wallets into a single, unified view.
+  * **Instant Stablecoin Settlement Rails**: Native Morph L2 peer-to-peer USDC settlements clearing invoices in 3 seconds instead of 3 days.
+  * **Deterministic AI Cashflow Co-Pilot**: Predictive modeling rescalable from 24 Hours to 90 Days to automatically predict runway alerts and safely time payables.
 
-## Slide 6: Business Model
-* **How do you make money?**
-    * **Transaction Fees:** A small flat fee or basis points (bps) per settlement.
-    * **SaaS/Subscription:** Monthly fee for premium features, reporting, or higher volumes.
-    * **Float/Yield (Optional):** Yield generation on funds in transit (if applicable and legally compliant).
+---
 
-## Slide 7: Go-to-Market (GTM) Strategy
-* **Target Audience:** Who are your first customers? (e.g., import/export businesses, web3 native companies, freelancers, global supply chain firms).
-* **Acquisition Channels:** Direct sales, partnerships with accounting software, targeted content marketing.
-* **Initial Wedge:** What is the easiest use case to prove value? (e.g., targeting specific high-friction remittance corridors).
+## Slide 4: Product Feature - The Consolidated Treasury Ledger
+* **High-Fidelity Aggregation**: Displays traditional operating reserves as a premium **black metallic titanium card deck** simulating corporate accounts (BDO, BPI, UnionBank, GCash, Maya).
+* **Direct SMS OTP Authorization**: Integrates simulated secure Brankas Open Finance credentials—bypass general selection popups directly to 6-digit SMS OTP gates (Sandbox passcode: `123456`).
+* **Dynamic Asset Syncing**: Instantly computes Consolidated PHP Reserves and pairs them with Web3 wallet stablecoins at the live exchange rate.
 
-## Slide 8: Competitive Landscape
-* **Traditional Competitors:** Banks (SWIFT), traditional fintechs (Wise for Business, Stripe).
-* **Web3 Competitors:** Other crypto payment processors.
-* **Competitive Advantage / Moat:** What makes Project Fehux better? (e.g., specific smart contract logic, better UI/UX, lower fees, regulatory compliance approach). 
-* *(Consider using a 2x2 matrix or a feature comparison checklist).*
+---
 
-## Slide 9: Traction & Milestones
-* **What have you achieved so far?** (e.g., Smart contracts deployed on testnet, MVP developed, initial user interviews conducted).
-* **Upcoming Milestones (Roadmap):**
-    * Q3: Mainnet launch.
-    * Q4: First 10 pilot B2B customers.
-    * Q1 Next Year: Integration with major ERP systems.
+## Slide 5: Product Feature - The Treasury Conversion Bridge
+* **Automated Fiat-to-Stablecoin Swap**: If an SME executive attempts to settle a vendor invoice with insufficient L2 USDC, Fehuvia auto-redirects them to the **Treasury Conversion Bridge**.
+* **Frictionless Liquidity Routing**:
+  * Debits operating cash from BDO/UnionBank/GCash via open APIs.
+  * Routes fiat through StraitsX Liquidity Pool swap structures at the live exchange rate (e.g., ₱58.30).
+  * Mints L2 USDC directly into the SME's wallet in a 3-step automated pipeline.
+* **Security Keypads**: Features digital OTP keypad validations and secure InstaPay QR mandate code generation.
 
-## Slide 10: The Team
-* **Key Members:** Names, roles, and quick bullet points on relevant experience (especially in fintech, blockchain, or B2B sales).
-* **Advisors (if any):** Mention notable advisors to build credibility.
+---
 
-## Slide 11: The Ask (Funding/Support)
-* **What are you looking for?** (e.g., "Raising $X amount in a Pre-Seed round.")
-* **Use of Funds:** How will the money be spent? (e.g., 50% Engineering, 30% Go-to-Market/Sales, 20% Legal/Compliance & Security Audits).
-* *(If not raising funds: State what you need, e.g., Pilot partners, strategic advisors).*
+## Slide 6: Product Feature - The AI Cashflow Co-Pilot
+* **Date-Rescalable Forecasting**: Toggling between **Today**, **Week**, **30 Days**, and **All Time** rescales the Recharts cashflow chart axes and expected inflows dynamically.
+* **AI Inflow Risk Assessments**: Automatically reads the invoice ledger and marks entries as:
+  * 🟢 **Safe to Pay**: Liquidity reserves are safe.
+  * 🟠 **Delay Payment**: Cashflow crunch predicted.
+  * 🔴 **Review Required**: Immediate runway risk detected.
 
-## Slide 12: Vision / Call to Action
-* **Long-term Vision:** What does the world look like when you succeed?
-* **Contact Information:** Email, Website, Twitter/LinkedIn, QR code to contact you.
-* **Final Statement:** A strong closing remark.
+---
+
+## Slide 7: Market Opportunity (SEA's B2B Payment Boom)
+* **Total Addressable Market (TAM)**: $17 Trillion global B2B payments market.
+* **Serviceable Addressable Market (SAM)**: The $350 Billion B2B trade transaction volume in Southeast Asia.
+* **Serviceable Obtainable Market (SOM)**: $12 Billion capture targeting import/export SMEs and high-growth digital businesses in the Philippines, Indonesia, and Vietnam.
+
+---
+
+## Slide 8: Business Model
+* **Transparent Execution Fees**: 0.25% flat transaction fee on fiat-to-stablecoin bridge conversions (significantly cheaper than FX margins).
+* **Workstation SaaS Tiers**:
+  * **Starter (Free)**: Basic ledger aggregation & manual stablecoin rails.
+  * **Enterprise**: Advanced AI-Copilot forecasting integrations, automated treasury rule engines, and automated multi-sig approvals.
+
+---
+
+## Slide 9: Competitive Landscape (Why Fehuvia Wins)
+* **Traditional Banks (BDO/BPI)**: Slow, disconnected, zero Web3 support, poor UX.
+* **Fintech Processors (Stripe/Wise)**: High fees, no treasury runway prediction, manual stablecoin rails.
+* **The Fehuvia Advantage**:
+  * 🎯 **Unified Visuals**: Premium black metallic card ledgers.
+  * ⚡ **Open Banking Interoperability**: Instant Brankas fiat-to-USDC conversion bridges.
+  * 🧠 **Deterministic AI**: Adaptive forecasting that guides B2B CFOs.
+
+---
+
+## Slide 10: Milestones & Project Runway
+* **Smart Contracts**: Completed Morph L2 `B2BSettlement.sol` ledger testnet deployment.
+* **Web Frontend Workspace**: Compiled Vite workstation with 0 compile errors and warnings.
+* **Open Banking Sandboxes**: Fully wired database models and verification keypads.
+* **Next Target**: Onboarding first 20 local corporate pilots to settle peer-to-peer import invoices in Morph USDC.
+
+---
+
+## Slide 11: Vision & Ask
+* **The Ask**: Seeking strategic partners, pilot B2B traders, and backing to establish fiat liquidity escrows in the SEA region.
+* **The Vision**: Re-architecting B2B payments in Southeast Asia so that capital is never idle, settlements are instantaneous, and cashflow risk is solved by deterministic AI.

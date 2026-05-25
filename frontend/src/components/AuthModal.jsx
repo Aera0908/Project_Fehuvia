@@ -140,12 +140,12 @@ export default function AuthModal({ modalType, setModalType, setView }) {
               {modalType === 'signup' && (
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
-                    Username
+                    Business Name
                   </label>
                   <input
                     type="text"
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#e4c37a]/50 focus:ring-1 focus:ring-[#e4c37a]/40 transition-all font-light text-sm"
-                    placeholder="Enter a display name"
+                    placeholder="Enter your business name"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />

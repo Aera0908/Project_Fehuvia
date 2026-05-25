@@ -1,36 +1,38 @@
-import React, { useState } from 'react';
-import { X, ShieldCheck, Key, Landmark, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ShieldCheck, Key, Landmark, AlertCircle, Phone, Delete } from 'lucide-react';
 
-export default function BrankasLinkModal({ isOpen, onClose, onLinkSuccess }) {
+export default function BrankasLinkModal({ isOpen, initialBank, onClose, onLinkSuccess }) {
   const [selectedBank, setSelectedBank] = useState(null); // 'bdo', 'bpi', 'ubp', 'gcash', 'maya'
-  const [loginId, setLoginId] = useState('');
-  const [pin, setPin] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Sync selectedBank with initialBank when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialBank) {
+        setSelectedBank(initialBank);
+      } else {
+        setSelectedBank(null);
+      }
+      setOtpCode('');
+      setError('');
+    }
+  }, [isOpen, initialBank]);
+
   if (!isOpen) return null;
 
-  const banks = [
-    { id: 'ubp', name: 'UnionBank of the Philippines', logoBg: 'bg-[#FF6600]', short: 'UnionBank' },
-    { id: 'bdo', name: 'Banco de Oro (BDO)', logoBg: 'bg-[#0033A0]', short: 'BDO' },
-    { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', logoBg: 'bg-[#980000]', short: 'BPI' },
-    { id: 'gcash', name: 'GCash Corporate Wallet', logoBg: 'bg-[#005CE6]', short: 'GCash' },
-    { id: 'maya', name: 'Maya Business Account', logoBg: 'bg-[#00E676]', short: 'Maya' }
-  ];
-
-  const handleBankSelect = (bank) => {
-    setSelectedBank(bank);
-    setError('');
-    setLoginId('');
-    setPin('');
-  };
-
   const handleConnect = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
 
-    if (!loginId || !pin) {
-      setError('Please fill in your banking credentials.');
+    if (otpCode.length < 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    if (otpCode !== '123456') {
+      setError('Invalid sandbox OTP code. Please enter 123456.');
       return;
     }
 
@@ -41,11 +43,36 @@ export default function BrankasLinkModal({ isOpen, onClose, onLinkSuccess }) {
       setLoading(false);
       onLinkSuccess({
         bankName: selectedBank.short,
-        balance: 12500000.00 // PHP 12.5 Million
+        bankId: selectedBank.id,
+        balance: selectedBank.id === 'ubp' ? 3200000.00 :
+                 selectedBank.id === 'bdo' ? 4500000.00 :
+                 selectedBank.id === 'bpi' ? 5800000.00 :
+                 selectedBank.id === 'gcash' ? 12500000.00 :
+                 selectedBank.id === 'maya' ? 1200000.00 : 12500000.00
       });
       setSelectedBank(null);
+      setOtpCode('');
     }, 2500);
   };
+
+  const handleKeypadPress = (num) => {
+    if (otpCode.length < 6) {
+      setOtpCode(prev => prev + num);
+      setError('');
+    }
+  };
+
+  const handleKeypadDelete = () => {
+    setOtpCode(prev => prev.slice(0, -1));
+  };
+
+  const logoBg = selectedBank ? (
+    selectedBank.id === 'ubp' ? 'bg-[#FF6600]' :
+    selectedBank.id === 'bdo' ? 'bg-[#0033A0]' :
+    selectedBank.id === 'bpi' ? 'bg-[#980000]' :
+    selectedBank.id === 'gcash' ? 'bg-[#005CE6]' :
+    selectedBank.id === 'maya' ? 'bg-[#00E676]' : 'bg-[#D4AF37]'
+  ) : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] font-outfit">
@@ -65,55 +92,18 @@ export default function BrankasLinkModal({ isOpen, onClose, onLinkSuccess }) {
           <X className="w-5 h-5" />
         </button>
 
-        {!selectedBank ? (
+        {selectedBank && (
           <>
-            {/* Bank Select Screen */}
+            {/* Direct SMS OTP Gate Screen */}
             <div className="text-center mb-6">
-              <Landmark className="w-10 h-10 text-gold-metallic mx-auto mb-3" />
-              <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
-                Link Philippine Bank
-              </h2>
-              <p className="text-white/40 text-xs font-light mt-1">
-                Link your commercial account via Southeast Asia's secure Brankas Open Finance API.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {banks.map((bank) => (
-                <button
-                  key={bank.id}
-                  onClick={() => handleBankSelect(bank)}
-                  className="w-full p-4 bg-[#0a0a0c] hover:bg-[#161618] border border-[#2C2C2C] hover:border-gold-metallic/40 rounded-2xl flex items-center gap-4 transition-all duration-300 cursor-pointer text-left group"
-                >
-                  {/* Localized mock bank avatar initials */}
-                  <div className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm text-white ${bank.logoBg} shadow-md`}>
-                    {bank.short.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block group-hover:text-gold-metallic transition-colors">{bank.name}</span>
-                    <span className="text-[9px] text-[#6a6a6a] block mt-0.5">Secure open finance connection</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            
-            <p className="text-[9px] text-center text-white/30 leading-relaxed font-light mt-6 flex items-center justify-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-gold-metallic" />
-              End-to-end 256-bit SSL encrypted. Fehuvia never stores login keys.
-            </p>
-          </>
-        ) : (
-          <>
-            {/* Credentials Link Screen */}
-            <div className="text-center mb-6">
-              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-bold text-lg text-white mx-auto mb-3 ${selectedBank.logoBg} shadow-lg`}>
+              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-bold text-lg text-white mx-auto mb-3 ${logoBg} shadow-lg`}>
                 {selectedBank.short.substring(0, 2).toUpperCase()}
               </div>
               <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
-                Connect to {selectedBank.short}
+                Authorize {selectedBank.short}
               </h2>
-              <p className="text-white/40 text-xs font-light mt-1">
-                Authenticate with your corporate online banking credentials.
+              <p className="text-white/40 text-xs font-light mt-1.5 leading-relaxed px-4">
+                Secure open finance login mandate sent. An SMS OTP code was dispatched by your bank to your registered mobile (+63 917 **** 201).
               </p>
             </div>
 
@@ -124,63 +114,67 @@ export default function BrankasLinkModal({ isOpen, onClose, onLinkSuccess }) {
               </div>
             )}
 
-            <form onSubmit={handleConnect} className="space-y-4">
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
-                  Corporate Login ID
-                </label>
-                <input
-                  type="text"
+            <div className="space-y-6 flex flex-col items-center">
+              {/* Code boxes display */}
+              <div className="flex gap-2 justify-center">
+                {[...Array(6)].map((_, i) => (
+                  <div 
+                    key={i}
+                    className={`h-11 w-9 rounded-xl border flex items-center justify-center font-mono text-lg font-bold transition-all ${
+                      otpCode.length === i 
+                        ? 'border-[#D4AF37] bg-[#D4AF37]/5 ring-1 ring-[#D4AF37]/25' 
+                        : 'border-white/10 bg-white/5'
+                    }`}
+                  >
+                    {otpCode[i] || ''}
+                  </div>
+                ))}
+              </div>
+
+              {/* Digital Keypad */}
+              <div className="w-full max-w-xs grid grid-cols-3 gap-2">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <button
+                    key={num}
+                    disabled={loading}
+                    onClick={() => handleKeypadPress(String(num))}
+                    className="py-3 bg-[#0a0a0c] hover:bg-[#161618] border border-[#2C2C2C] active:border-gold-metallic/50 rounded-xl font-bold font-mono text-base hover:text-gold-metallic transition-all cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
                   disabled={loading}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#e4c37a]/50 focus:ring-1 focus:ring-[#e4c37a]/40 transition-all font-light text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  placeholder="e.g. bdo_corp_99182"
-                  value={loginId}
-                  onChange={(e) => setLoginId(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">
-                  Access Password / PIN
-                </label>
-                <input
-                  type="password"
+                  onClick={handleKeypadDelete}
+                  className="py-3 bg-[#0a0a0c] hover:bg-[#161618] border border-[#2C2C2C] rounded-xl flex items-center justify-center text-red-400 hover:text-red-300 transition-all cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Delete className="w-5 h-5" />
+                </button>
+                <button
                   disabled={loading}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#e4c37a]/50 focus:ring-1 focus:ring-[#e4c37a]/40 transition-all font-light text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  placeholder="••••••••"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  required
-                />
+                  onClick={() => handleKeypadPress('0')}
+                  className="py-3 bg-[#0a0a0c] hover:bg-[#161618] border border-[#2C2C2C] rounded-xl font-bold font-mono text-base hover:text-gold-metallic transition-all cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  0
+                </button>
+                <button
+                  onClick={handleConnect}
+                  disabled={otpCode.length < 6 || loading}
+                  className={`py-3 rounded-xl flex items-center justify-center font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer ${
+                    otpCode.length === 6 && !loading
+                      ? 'bg-gold-metallic hover:bg-gold-metallic/90 text-black shadow-lg shadow-gold-metallic/15'
+                      : 'bg-[#161618] border border-[#2C2C2C] text-white/20 cursor-not-allowed'
+                  }`}
+                >
+                  {loading ? 'Linking...' : 'Connect'}
+                </button>
               </div>
-
-              <div className="p-4 rounded-xl border border-[#D4AF37]/10 bg-[#D4AF37]/5 flex gap-2.5 items-start">
-                <Key className="w-4 h-4 text-gold-metallic shrink-0 mt-0.5" />
-                <span className="text-[10px] text-white/50 leading-relaxed font-light">
-                  Fehuvia handles this request via an encrypted API gateway. BDO will prompt an OTP verification code.
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 mt-4 transition-all duration-300 shadow-xl cursor-pointer ${
-                  loading ? 'opacity-60 cursor-wait' : ''
-                }`}
-              >
-                {loading ? 'Securing Connection...' : 'Authorize & Connect Link'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedBank(null)}
-                disabled={loading}
-                className="w-full text-center text-xs text-white/40 hover:text-white transition-colors cursor-pointer py-1 block disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                Go Back
-              </button>
-            </form>
+              
+              <span className="text-[9px] text-white/30 font-light flex items-center gap-1.5 justify-center">
+                <ShieldCheck className="w-3.5 h-3.5 text-gold-metallic" />
+                Secured by 256-bit open finance credential tokenization.
+              </span>
+            </div>
           </>
         )}
 

@@ -2,24 +2,52 @@ import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Sparkles } from 'lucide-react';
 
-export function CashflowPrediction({ predictions, balance = 0 }) {
+export function CashflowPrediction({ predictions, balance = 0, timeframe = '30 Days' }) {
   const runwayDays = predictions?.predicted_runway || 0;
   const isTrendRisk = predictions?.cash_flow_trend === 'risk';
   const hasData = balance > 0 || (predictions?.recommendations && predictions.recommendations.length > 0);
   
+  // Dynamic parameters based on selected timeframe
+  let length = 10;
+  let labelPrefix = 'Day';
+  let multiplyFactor = 30;
+  let inflowScale = 1.0;
+
+  if (timeframe === 'Today') {
+    length = 8;
+    labelPrefix = 'Hour';
+    multiplyFactor = 24;
+    inflowScale = 1 / 30; // 1 day's worth
+  } else if (timeframe === 'Week') {
+    length = 7;
+    labelPrefix = 'Day';
+    multiplyFactor = 7;
+    inflowScale = 7 / 30; // 7 days' worth
+  } else if (timeframe === '30 Days') {
+    length = 10;
+    labelPrefix = 'Day';
+    multiplyFactor = 30;
+    inflowScale = 1.0;
+  } else if (timeframe === 'All Time') {
+    length = 12;
+    labelPrefix = 'Day';
+    multiplyFactor = 90;
+    inflowScale = 3.0; // 90 days' worth
+  }
+
   // Calculate dynamic weekly/monthly values
-  const expectedInflow = hasData ? 22000.00 : 0.00; // Simulated monthly receivables inflow
+  const expectedInflow = hasData ? 22000.00 * inflowScale : 0.00; // Simulated receivables inflow
   
   // Dynamic chart generation starting from current balance
-  const chartData = Array.from({ length: 10 }).map((_, idx) => {
-    const factor = idx / 9;
+  const chartData = Array.from({ length }).map((_, idx) => {
+    const factor = idx / (length - 1);
     const change = expectedInflow * factor - (expectedInflow * 0.4) * factor * (isTrendRisk ? 1.5 : 0.8);
     const predictedVal = Math.round(balance + change);
     return {
       id: idx + 1,
-      day: `Day ${Math.round(factor * 30) || 1}`,
+      day: `${labelPrefix} ${Math.round(factor * multiplyFactor) || 1}`,
       predicted: predictedVal,
-      actual: idx < 6 && hasData ? Math.round(balance + change * 0.95) : null
+      actual: idx < (length * 0.6) && hasData ? Math.round(balance + change * 0.95) : null
     };
   });
 
@@ -35,7 +63,7 @@ export function CashflowPrediction({ predictions, balance = 0 }) {
              inset 0 1px 1px rgba(255, 255, 255, 0.03),
              inset 0 -1px 1px rgba(0, 0, 0, 0.5)
            `,
-           background: 'linear-gradient(145deg, #0d0d0d 0%, #0a0a0a 50%, #080808 100%)'
+           background: 'linear-gradient(145deg, #0d0d0d 0%, #0a0a0c 50%, #080808 100%)'
          }}>
       
       {/* Chart Header */}
@@ -45,7 +73,7 @@ export function CashflowPrediction({ predictions, balance = 0 }) {
               style={{
                 textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3)'
               }}>
-            30-Day AI Cashflow Prediction
+            {timeframe === 'Today' ? '24-Hour' : timeframe === 'Week' ? '7-Day' : timeframe === '30 Days' ? '30-Day' : '90-Day'} AI Cashflow Prediction
           </h2>
           <p className="text-xs sm:text-sm text-[#a1a1a1]">AI-powered forecasting with 94% accuracy</p>
         </div>

@@ -12,13 +12,47 @@ import { AnalyticsView } from './AnalyticsView';
 import { ProfileView } from './ProfileView';
 import { NotificationsView } from './NotificationsView';
 import { HelpView } from './HelpView';
+import { BridgeView } from './BridgeView';
 import DemoDisclaimer from '../DemoDisclaimer';
 import BrankasLinkModal from '../BrankasLinkModal';
-import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck } from 'lucide-react';
+import { BankLogo } from '../BankLogo';
+import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck, Calendar, Layers, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function DashboardLayout({ setView, handleLogout }) {
-  // Navigation page routing state
-  const [currentPage, setCurrentPage] = useState('Dashboard');
+  // Client-side SPA routing helper to parse path and return page state
+  const getPageFromPath = () => {
+    const path = window.location.pathname; // e.g. '/bridge' or '/cash-flow'
+    const cleanPath = path.replace(/^\//, '').toLowerCase();
+    
+    if (cleanPath === 'cash-flow') return 'Cash Flow';
+    
+    const pages = ['dashboard', 'invoices', 'payments', 'treasury', 'bridge', 'analytics', 'profile', 'notifications', 'help'];
+    const match = pages.find(p => p === cleanPath);
+    if (match) {
+      return match.charAt(0).toUpperCase() + match.slice(1);
+    }
+    return 'Dashboard';
+  };
+
+  // Navigation page routing state initialized from URL path
+  const [currentPage, setCurrentPage] = useState(() => getPageFromPath());
+
+  // Listen to popstate (browser back/forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPage(getPageFromPath());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update browser URL path when page state changes
+  useEffect(() => {
+    const cleanPath = currentPage.toLowerCase() === 'dashboard' ? '/' : `/${currentPage.toLowerCase().replace(' ', '-')}`;
+    if (window.location.pathname !== cleanPath) {
+      window.history.pushState({}, '', cleanPath);
+    }
+  }, [currentPage]);
 
   // Header scroll glassmorph state with hysteresis to prevent layout bounce
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
@@ -71,6 +105,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // Bank Connection State
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [selectedBankToLink, setSelectedBankToLink] = useState(null);
   const [bankLinked, setBankLinked] = useState(() => {
     try {
       const stored = localStorage.getItem('fehuvia_user');
@@ -101,6 +136,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
   const [predictions, setPredictions] = useState(null);
   const [runway, setRunway] = useState(45);
   const [trend, setTrend] = useState('stable');
+  // Prefilled B2B settlement conversions redirection state
+  const [prefilledBridgeInvoice, setPrefilledBridgeInvoice] = useState(null);
+  
+  // Active dashboard time sort filter
+  const [dashboardTimeframe, setDashboardTimeframe] = useState('30 Days');
 
   // User Profile
   const [userProfile, setUserProfile] = useState(() => {
@@ -126,11 +166,48 @@ export default function DashboardLayout({ setView, handleLogout }) {
           setUserProfile(data.user);
           localStorage.setItem('fehuvia_user', JSON.stringify(data.user));
           if (data.user.balance !== undefined) setBalance(Number(data.user.balance));
-          if (data.user.portfolioValue !== undefined) setPortfolioValue(Number(data.user.portfolioValue));
         }
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+    }
+  };
+
+  const handleUpdateAutomationLevel = async (level) => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/onboarding`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          automationLevel: level,
+          riskProfile: userProfile.riskProfile || 'balanced',
+          walletAddress: userProfile.walletAddress
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const updatedUser = {
+          ...userProfile,
+          automationLevel: level
+        };
+        setUserProfile(updatedUser);
+        localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
+        
+        setToast({
+          show: true,
+          message: `Automation mode updated to ${level === 'manual' ? 'Full Manual' : level === 'auto' ? 'Fully Auto' : 'Co-Pilot'}!`,
+          txHash: 'Settings Saved'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update automation level settings:', err);
     }
   };
 
@@ -172,7 +249,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
           scheduled: inv.status === 'scheduled',
           loading: false,
           txHash: inv.txHash,
-          supplierWallet: inv.supplierWallet
+          supplierWallet: inv.supplierWallet,
+          hasFehuviaAccount: !!inv.hasFehuviaAccount
         }));
         setInvoices(mapped);
       }
@@ -233,6 +311,40 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // Logout confirmation modal state
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Dynamic Fiat-to-USDC Liquidity Bridge Modal State
+  const [showBridgeModal, setShowBridgeModal] = useState(false);
+  const [bridgeInvoice, setBridgeInvoice] = useState(null);
+  const [bridgeStep, setBridgeStep] = useState(0); // 0: idle, 1: debiting, 2: swapping, 3: minting, 4: complete
+  const [bridgeStatus, setBridgeStatus] = useState('');
+  const [demoUSDCBalance, setDemoUSDCBalance] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fehuvia_user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u.email === 'demo@fehuvia.com' || u.email === 'admin@fehuvia.com') {
+          return 42881.64;
+        }
+      }
+    } catch {}
+    return 0;
+  });
+
+  // Dynamic Manual Review Checklist Modal State
+  const [reviewModal, setReviewModal] = useState({ isOpen: false, invoice: null });
+  const [checkedItems, setCheckedItems] = useState({ whitelist: false, procurement: false, limits: false, runway: false });
+
+  // Dynamic L2-to-Bank Off-ramp Bridge Modal State
+  const [showOffRampModal, setShowOffRampModal] = useState(false);
+  const [offRampInvoice, setOffRampInvoice] = useState(null);
+  const [offRampStep, setOffRampStep] = useState(0); // 0: idle, 1: lock, 2: swap, 3: disburse, 4: complete
+  const [offRampStatus, setOffRampStatus] = useState('');
+
+  // Dynamic Calendar Postpone Modal State
+  const [scheduleModal, setScheduleModal] = useState({ isOpen: false, invoice: null });
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
 
   // EVM Wallet Modal states
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
@@ -574,9 +686,15 @@ export default function DashboardLayout({ setView, handleLogout }) {
       return;
     }
 
+    if (address.startsWith('0xdemo') || !ethers.isAddress(address)) {
+      // Presentation demo account: bypass on-chain queries and load premium mock balance
+      setWalletUSDCBalance(demoUSDCBalance);
+      return;
+    }
+
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const USDC_ADDRESS = "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
+      const USDC_ADDRESS = import.meta.env.VITE_USDC_CONTRACT_ADDRESS || "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
       const ERC20_ABI = ["function balanceOf(address account) view returns (uint256)"];
       const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
       const bal = await usdc.balanceOf(address);
@@ -750,7 +868,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
   };
 
   // Handle Philippine Bank linking success via simulated Brankas API
-  const handleLinkBankSuccess = async ({ bankName, balance: linkedBalance }) => {
+  const handleLinkBankSuccess = async ({ bankName, bankId, balance: linkedBalance }) => {
     const token = localStorage.getItem('fehuvia_token');
     if (!token) return;
 
@@ -761,7 +879,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ bankName, balance: linkedBalance })
+        body: JSON.stringify({ bankName, bankId, balance: linkedBalance })
       });
 
       if (!res.ok) throw new Error("Failed to link bank account in database.");
@@ -772,16 +890,18 @@ export default function DashboardLayout({ setView, handleLogout }) {
       const storedUser = JSON.parse(localStorage.getItem('fehuvia_user') || '{}');
       const updatedUser = {
         ...storedUser,
-        bankLinked: true,
-        bankName: bankName,
-        balance: linkedBalance
+        bankLinked: data.user.bankLinked,
+        bankName: data.user.bankName,
+        balance: data.user.balance,
+        linkedBanks: data.user.linkedBanks
       };
       localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
 
       setUserProfile(updatedUser);
-      setBankLinked(true);
-      setBankName(bankName);
-      setBalance(linkedBalance);
+      setBankLinked(data.user.bankLinked);
+      setBankName(data.user.bankName);
+      setBalance(Number(data.user.balance));
+      setSelectedBankToLink(null);
       setIsBankModalOpen(false);
 
       setToast({
@@ -799,7 +919,95 @@ export default function DashboardLayout({ setView, handleLogout }) {
     }
   };
 
-  // Handle traditional banking disconnection
+  // Handle individual bank unlinking
+  const handleUnlinkBank = async (bankId) => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/unlink-bank`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ bankId })
+      });
+
+      if (!res.ok) throw new Error("Failed to unlink bank account.");
+
+      const data = await res.json();
+
+      // Update local storage session
+      const storedUser = JSON.parse(localStorage.getItem('fehuvia_user') || '{}');
+      const updatedUser = {
+        ...storedUser,
+        bankLinked: data.user.bankLinked,
+        bankName: data.user.bankName,
+        balance: data.user.balance,
+        linkedBanks: data.user.linkedBanks
+      };
+      localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
+
+      setUserProfile(updatedUser);
+      setBankLinked(data.user.bankLinked);
+      setBankName(data.user.bankName);
+      setBalance(Number(data.user.balance));
+
+      setToast({
+        show: true,
+        message: `Disconnected bank account successfully.`,
+        txHash: 'API Unlinked'
+      });
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: 'Failed to unlink bank account. Please try again.',
+        txHash: 'API Error'
+      });
+    }
+  };
+
+  // Handle on-demand pristine demo data reset
+  const handleResetDemoState = async () => {
+    const token = localStorage.getItem('fehuvia_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/reset-demo`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        // Reset local presentation states to standard seeded standards
+        setDemoUSDCBalance(42881.64);
+        setWalletUSDCBalance(42881.64);
+        
+        // Refresh profile state and invoice ledgers
+        await fetchProfile();
+        await fetchInvoices();
+        
+        setToast({
+          show: true,
+          message: 'Workstation successfully restored to pristine presentation settings.',
+          txHash: 'Demo Refreshed'
+        });
+      } else {
+        throw new Error('Failed to reset presentation database state.');
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: '⚠️ Failed to reset presentation database state.',
+        txHash: 'Error'
+      });
+    }
+  };
+
+  // Handle traditional banking disconnection (reset all)
   const handleDisconnectBank = async () => {
     const token = localStorage.getItem('fehuvia_token');
     if (!token) return;
@@ -814,13 +1022,16 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
       if (!res.ok) throw new Error("Failed to disconnect bank account.");
 
+      const data = await res.json();
+
       // Update local storage session
       const storedUser = JSON.parse(localStorage.getItem('fehuvia_user') || '{}');
       const updatedUser = {
         ...storedUser,
         bankLinked: false,
         bankName: '',
-        balance: 0.00
+        balance: 0.00,
+        linkedBanks: data.user.linkedBanks
       };
       localStorage.setItem('fehuvia_user', JSON.stringify(updatedUser));
 
@@ -831,8 +1042,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
       setToast({
         show: true,
-        message: 'Traditional banking account disconnected.',
-        txHash: 'API Offline'
+        message: 'All bank linkages disconnected successfully.',
+        txHash: 'API Off'
       });
     } catch (err) {
       console.error(err);
@@ -859,12 +1070,216 @@ export default function DashboardLayout({ setView, handleLogout }) {
     }
   };
 
+  const handleExecuteBridge = () => {
+    setBridgeStep(1);
+    setBridgeStatus('Debiting ₱' + (bridgeInvoice.amount * exchangeRate).toLocaleString(undefined, {minimumFractionDigits:2}) + ' PHP from GCash Business Wallet via Brankas Secure APIs...');
+    
+    setTimeout(() => {
+      setBridgeStep(2);
+      setBridgeStatus('Routing stablecoins through StraitsX Liquidity Pool swap system...');
+    }, 1200);
+
+    setTimeout(() => {
+      setBridgeStep(3);
+      setBridgeStatus('Minting $' + bridgeInvoice.amount.toLocaleString() + ' USDC into Morph L2 Key (0xdemo7970C5...)...');
+    }, 2400);
+
+    setTimeout(() => {
+      setBridgeStep(4);
+      setBridgeStatus('Bridge complete! $' + bridgeInvoice.amount.toLocaleString() + ' USDC successfully credited to your wallet key.');
+      
+      // Update GCash Pesos balance (debit equivalent fiat)
+      const debitedPHP = bridgeInvoice.amount * exchangeRate;
+      setBalance(prev => Math.max(0, prev - debitedPHP));
+      
+      // Credit USDC stablecoins to demo wallet balance!
+      setDemoUSDCBalance(prev => prev + bridgeInvoice.amount);
+      setWalletUSDCBalance(prev => prev + bridgeInvoice.amount);
+      
+      setToast({
+        show: true,
+        message: `Inbound Bridge: Successfully converted ₱${debitedPHP.toLocaleString(undefined, {maximumFractionDigits:0})} to $${bridgeInvoice.amount.toLocaleString()} USDC via GCash!`,
+        txHash: 'StraitsX Bridge'
+      });
+    }, 3600);
+  };
+
+  const handleExecuteOffRamp = () => {
+    setOffRampStep(1);
+    setOffRampStatus('Initializing secure L2 stablecoin lock-up to off-ramp gateway pool (StraitsX)...');
+
+    setTimeout(() => {
+      setOffRampStep(2);
+      setOffRampStatus('Exchanging stablecoins for local PHP fiat in liquidity pool registers at live rate...');
+    }, 1200);
+
+    setTimeout(() => {
+      setOffRampStep(3);
+      setOffRampStatus(`Dispatching real-time PESONet/InstaPay payout to ${offRampInvoice.supplierWallet} via Brankas Secure APIs...`);
+    }, 2400);
+
+    setTimeout(() => {
+      setOffRampStep(4);
+      setOffRampStatus(`Payout successful! Supplier's bank account successfully credited. Obligations cleared.`);
+      
+      // Perform actual settlement database sync now!
+      confirmOffRampSettlement(offRampInvoice.id);
+    }, 3600);
+  };
+
+  const confirmOffRampSettlement = async (id) => {
+    try {
+      const token = localStorage.getItem('fehuvia_token');
+      const mockTx = '0xmockofframp' + Buffer.from(id).toString('hex').substring(0, 16) + Math.floor(Math.random() * 100);
+
+      const res = await fetch(`${API_BASE}/api/invoices/${id}/settle`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ txHash: mockTx })
+      });
+
+      if (!res.ok) throw new Error('Off-ramp settlement database sync failed');
+
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === id) {
+          setToast({
+            show: true,
+            message: `Off-Ramp successful: disbursed $${inv.amount.toLocaleString()} USDC to ${inv.supplierWallet}!`,
+            txHash: `${mockTx.substring(0, 12)}...`
+          });
+
+          setNotifications(prevNotif => [
+            {
+              id: `notif-${Date.now()}`,
+              title: 'L2-to-Bank Off-Ramp Cleared',
+              message: `Invoice ${inv.id} cleared. Stablecoins successfully off-ramped to ${inv.supplierWallet}.`,
+              time: 'Just now',
+              read: false,
+              type: 'success',
+              meta: `Tx: ${mockTx.substring(0, 12)}...`
+            },
+            ...prevNotif
+          ]);
+
+          return { ...inv, loading: false, settled: true, txHash: mockTx };
+        }
+        return inv;
+      }));
+
+      // Deduct USDC balance for the buyer
+      setDemoUSDCBalance(prev => Math.max(0, prev - offRampInvoice.amount));
+      setWalletUSDCBalance(prev => Math.max(0, prev - offRampInvoice.amount));
+
+      // Sync workstation states
+      fetchProfile();
+      fetchInvoices();
+      fetchPredictions();
+      fetchPayments();
+    } catch (err) {
+      console.error(err);
+      setToast({
+        show: true,
+        message: 'Off-ramp payment cleared, but database failed to update.',
+        txHash: 'Sync Error'
+      });
+      setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+    }
+  };
+
   const executeSettlement = async (id) => {
     const targetInvoice = invoices.find(inv => inv.id === id);
     if (!targetInvoice) return;
 
     // 1. Set specific invoice to loading state
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: true } : inv));
+
+    if (userProfile.email === 'demo@fehuvia.com') {
+      // Presentation demo account: check if they have enough USDC balance!
+      if (walletUSDCBalance < targetInvoice.amount) {
+        // Insufficient USDC stablecoins! Redirect to Treasury Bridge!
+        setPrefilledBridgeInvoice(targetInvoice);
+        setToast({
+          show: true,
+          message: `⚠️ Insufficient USDC. Redirecting to Treasury Bridge...`,
+          txHash: 'Redirecting'
+        });
+        setCurrentPage('Bridge');
+        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+        return;
+      }
+
+      // 2. Check if the supplier destination is a standard crypto address
+      const isCryptoDestination = targetInvoice.supplierWallet && targetInvoice.supplierWallet.startsWith('0x');
+
+      if (!isCryptoDestination) {
+        // Supplier uses a traditional bank account! Open the interactive L2-to-Bank Off-ramp Bridge!
+        setOffRampInvoice(targetInvoice);
+        setOffRampStep(0);
+        setShowOffRampModal(true);
+        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+        return;
+      }
+
+      // Presentation demo account: bypass MetaMask and execute direct instant database sync
+      try {
+        const token = localStorage.getItem('fehuvia_token');
+        const mockTx = '0xmockdemo605a9ee6284739200fdc55ef21e' + Math.floor(Math.random() * 100);
+        
+        const res = await fetch(`${API_BASE}/api/invoices/${id}/settle`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ txHash: mockTx })
+        });
+
+        if (!res.ok) throw new Error('Demo settlement sync failed');
+
+        setInvoices(prev => prev.map(inv => {
+          if (inv.id === id) {
+            setToast({
+              show: true,
+              message: `Demo Settlement successful: cleared $${inv.amount.toLocaleString()} USDC via GCash!`,
+              txHash: `${mockTx.substring(0, 10)}...`
+            });
+
+            setNotifications(prevNotif => [
+              {
+                id: `notif-${Date.now()}`,
+                title: 'Demo Transaction Cleared',
+                message: `Demo invoice ${inv.id} cleared instantly via GCash/USDC conversion.`,
+                time: 'Just now',
+                read: false,
+                type: 'success',
+                meta: `Tx: ${mockTx.substring(0, 10)}...`
+              },
+              ...prevNotif
+            ]);
+
+            return { ...inv, loading: false, settled: true, txHash: mockTx };
+          }
+          return inv;
+        }));
+
+        // Deduct stablecoins locally from demo balance
+        setDemoUSDCBalance(prev => Math.max(0, prev - targetInvoice.amount));
+        setWalletUSDCBalance(prev => Math.max(0, prev - targetInvoice.amount));
+
+        // Sync workstation states with backend
+        fetchProfile();
+        fetchInvoices();
+        fetchPredictions();
+        fetchPayments();
+      } catch (err) {
+        console.error(err);
+        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
+      }
+      return; // Stop right here, bypass MetaMask
+    }
 
     const token = localStorage.getItem('fehuvia_token');
     if (!token) {
@@ -889,8 +1304,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       const userAddress = await signer.getAddress();
 
       // Deployed contract addresses in our sandbox
-      const USDC_ADDRESS = "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
-      const SETTLEMENT_ADDRESS = "0xFc2Cc77640Ba5dEccD22BA0045a698b504871d95";
+      const USDC_ADDRESS = import.meta.env.VITE_USDC_CONTRACT_ADDRESS || "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
+      const SETTLEMENT_ADDRESS = import.meta.env.VITE_SETTLEMENT_CONTRACT_ADDRESS || "0xFc2Cc77640Ba5dEccD22BA0045a698b504871d95";
 
       // ABIs
       const ERC20_ABI = [
@@ -962,7 +1377,6 @@ export default function DashboardLayout({ setView, handleLogout }) {
         if (inv.id === id) {
           // Adjust top-level available balances and total portfolio values
           setBalance(prevBal => Math.max(0, prevBal - inv.amount));
-          setPortfolioValue(prevVal => Math.max(0, prevVal - inv.amount));
 
           // Trigger toast
           setToast({
@@ -993,6 +1407,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
       // Background refresh of AI forecasts, user balances, exchange rates, and settled payments
       fetchPredictions();
       fetchProfile();
+      fetchInvoices();
       fetchRates();
       fetchPayments();
 
@@ -1010,12 +1425,247 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // Handle invoice postpone scheduling
   const handleSchedule = (id) => {
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scheduled: true } : inv));
+    const targetInvoice = invoices.find(inv => inv.id === id);
+    if (!targetInvoice) return;
+
+    const today = new Date();
+    setCalendarMonth(today.getMonth());
+    setCalendarYear(today.getFullYear());
+
+    // Calculate dynamic optimal date (5 days after original due date)
+    let optDate = new Date(targetInvoice.dueDate);
+    if (isNaN(optDate.getTime())) {
+      optDate = new Date();
+    }
+    optDate.setDate(optDate.getDate() + 5);
+    const optimalDateStr = optDate.toISOString().substring(0, 10);
+
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (optimalDateStr < todayString) {
+      setSelectedScheduleDate(todayString);
+    } else {
+      setSelectedScheduleDate(optimalDateStr);
+    }
+
+    setScheduleModal({
+      isOpen: true,
+      invoice: targetInvoice
+    });
+  };
+
+  const handlePrevMonth = () => {
+    const today = new Date();
+    if (calendarYear < today.getFullYear() || (calendarYear === today.getFullYear() && calendarMonth <= today.getMonth())) {
+      return;
+    }
+    setCalendarMonth(prev => {
+      if (prev === 0) {
+        setCalendarYear(y => y - 1);
+        return 11;
+      }
+      return prev - 1;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(prev => {
+      if (prev === 11) {
+        setCalendarYear(y => y + 1);
+        return 0;
+      }
+      return prev + 1;
+    });
+  };
+
+  const executeScheduling = async (id, dateStr) => {
+    try {
+      const token = localStorage.getItem('fehuvia_token');
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/api/invoices/${id}/schedule`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          scheduledDate: dateStr
+        })
+      });
+
+      if (res.ok) {
+        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, scheduled: true, dueDate: dateStr } : inv));
+        
+        setToast({
+          show: true,
+          message: `Invoice ${id} successfully postponed to ${dateStr}.`,
+          txHash: 'Calendar Postpone Updated'
+        });
+
+        setScheduleModal({ isOpen: false, invoice: null });
+        fetchPredictions();
+        fetchInvoices();
+      } else {
+        throw new Error('Failed to update scheduled date.');
+      }
+    } catch (err) {
+      console.error('Error postponing invoice:', err);
+      setToast({
+        show: true,
+        message: 'Could not postpone invoice. Check connection.',
+        txHash: 'Scheduling Error'
+      });
+    }
+  };
+
+  const renderCalendar = (invoice) => {
+    if (!invoice) return null;
     
-    setToast({
-      show: true,
-      message: `Invoice ${id} has been scheduled for postponed payment. Runway optimized.`,
-      txHash: 'Local Schedule updated'
+    const year = calendarYear;
+    const monthIndex = calendarMonth;
+
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const firstDayIndex = new Date(year, monthIndex, 1).getDay();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+    const today = new Date();
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const isPrevDisabled = (year < today.getFullYear()) || (year === today.getFullYear() && monthIndex <= today.getMonth());
+
+    const cells = [];
+    // Blank padding days
+    for (let i = 0; i < firstDayIndex; i++) {
+      cells.push({ type: 'empty', id: `empty-${i}` });
+    }
+    // Days in current month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateString = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      const origDueDate = new Date(invoice.dueDate);
+      const optDate = new Date(origDueDate);
+      optDate.setDate(optDate.getDate() + 5);
+      const optimalString = optDate.toISOString().substring(0, 10);
+      
+      const isOptimal = dateString === optimalString;
+      const isOriginalDue = dateString === invoice.dueDate;
+      const isPast = dateString < todayString;
+      
+      cells.push({
+        type: 'day',
+        day,
+        dateString,
+        isOptimal,
+        isOriginalDue,
+        isPast
+      });
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Month Navigation Title with Centered Navigation Buttons */}
+        <div className="flex items-center justify-between relative mb-2">
+          {/* Left Spacer to perfectly balance the right-side badge and keep the center aligned */}
+          <div className="w-20 hidden xs:block"></div>
+          
+          <div className="flex items-center gap-3 mx-auto">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              disabled={isPrevDisabled}
+              className="p-1.5 rounded-lg border border-[#2C2C2C] bg-[#0a0a0c] hover:bg-[#161618] text-white disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-white uppercase tracking-wider min-w-[120px] text-center">{months[monthIndex]} {year}</span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1.5 rounded-lg border border-[#2C2C2C] bg-[#0a0a0c] hover:bg-[#161618] text-white transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Right badge container with balanced width */}
+          <div className="w-20 flex justify-end shrink-0">
+            {userProfile.automationLevel === 'semi' && (
+              <div className="flex items-center gap-1 text-[9px] text-[#D4AF37] font-bold uppercase tracking-wider animate-pulse bg-[#D4AF37]/5 px-2 py-1 rounded-full border border-[#D4AF37]/15">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D4AF37]"></span>
+                <span>AI Active</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Days of Week headers */}
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[#6a6a6a] uppercase tracking-wider">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+            <div key={d} className="py-1">{d}</div>
+          ))}
+        </div>
+
+        {/* Grid Cells */}
+        <div className="grid grid-cols-7 gap-1.5">
+          {cells.map((cell, idx) => {
+            if (cell.type === 'empty') {
+              return <div key={cell.id} className="aspect-square"></div>;
+            }
+
+            const isSelected = selectedScheduleDate === cell.dateString;
+            const showOptimalHighlight = userProfile.automationLevel === 'semi' && cell.isOptimal;
+
+            return (
+              <button
+                key={idx}
+                type="button"
+                disabled={cell.isPast}
+                onClick={() => setSelectedScheduleDate(cell.dateString)}
+                className={`aspect-square rounded-xl flex flex-col items-center justify-center relative cursor-pointer border transition-all ${
+                  cell.isPast
+                    ? 'bg-[#0a0a0c]/30 border-[#1b1b1d] text-white/20 cursor-not-allowed'
+                    : isSelected
+                    ? 'bg-gold-metallic border-gold-metallic text-black font-extrabold shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                    : showOptimalHighlight
+                    ? 'bg-[#D4AF37]/15 border-[#D4AF37] text-[#D4AF37] font-bold shadow-[inset_0_0_8px_rgba(212,175,55,0.25)] hover:bg-[#D4AF37]/25'
+                    : cell.isOriginalDue
+                    ? 'bg-white/5 border-white/20 text-white/90 hover:bg-white/10'
+                    : 'bg-[#0a0a0c] border-[#2C2C2C] text-white/50 hover:bg-[#161618] hover:text-white'
+                }`}
+              >
+                <span className="text-xs">{cell.day}</span>
+                {cell.isOriginalDue && !isSelected && !cell.isPast && (
+                  <span className="absolute bottom-1 h-1 w-1 rounded-full bg-white/40"></span>
+                )}
+                {showOptimalHighlight && !isSelected && !cell.isPast && (
+                  <span className="absolute bottom-1 text-[7px] font-black text-[#D4AF37] uppercase tracking-[0.05em] leading-none scale-75">OPT</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Handle invoice manual review
+  const handleReview = (id) => {
+    const targetInvoice = invoices.find(inv => inv.id === id);
+    if (!targetInvoice) return;
+
+    setCheckedItems({
+      whitelist: false,
+      procurement: false,
+      limits: false,
+      runway: false
+    });
+    
+    setReviewModal({
+      isOpen: true,
+      invoice: targetInvoice
     });
   };
 
@@ -1103,6 +1753,9 @@ export default function DashboardLayout({ setView, handleLogout }) {
   const pendingCount = activeInvoices.length;
   const pendingTotal = activeInvoices.reduce((sum, inv) => sum + inv.amount, 0);
 
+  const userEmail = userProfile.email || 'admin@fehuvia.com';
+  const businessName = userProfile.username || userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ' Corp';
+
   return (
     <div className="dark h-screen bg-[#070708] flex relative overflow-hidden font-outfit text-white">
       
@@ -1166,6 +1819,21 @@ export default function DashboardLayout({ setView, handleLogout }) {
             {/* Header values */}
             <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
               
+              {/* Business Brand Block */}
+              <div className="cursor-pointer text-left mr-1 sm:mr-2" onClick={() => setCurrentPage('Profile')}>
+                <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
+                  <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-[0.12em] whitespace-nowrap">SME Account</span>
+                </div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className={`text-[9px] font-bold text-[#D4AF37] uppercase tracking-[0.12em] hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>SME</span>
+                  <span className={`font-black text-white leading-tight transition-all duration-300 tracking-wide ${isHeaderScrolled ? 'text-sm' : 'text-base sm:text-lg'}`}>
+                    {businessName}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`w-px bg-[#2C2C2C] hidden sm:block transition-all duration-300 ${isHeaderScrolled ? 'h-5' : 'h-10'}`}></div>
+
               {/* Portfolio Value */}
               <div className="cursor-pointer" onClick={() => setCurrentPage('Dashboard')}>
                 {/* Label row — collapses via max-height + opacity */}
@@ -1392,11 +2060,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   <User className={`text-[#0a0a0a] transition-all duration-300 ${isHeaderScrolled ? 'w-3.5 h-3.5' : 'w-4 h-4 sm:w-5 h-5'}`} />
                 </div>
                 {/* Name — collapses via CSS */}
-                <div className={`text-left hidden sm:block overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-w-0 opacity-0' : 'max-w-[160px] opacity-100'}`}>
-                  <p className="text-sm font-bold text-white leading-none mb-0.5 whitespace-nowrap">
-                    {userProfile.email.split('@')[0].toUpperCase()}
+                <div className={`text-left hidden sm:block overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-w-0 opacity-0' : 'max-w-[220px] opacity-100'}`}>
+                  <p className="text-sm font-bold text-white leading-none mb-0.5 whitespace-nowrap truncate" title={businessName}>
+                    {businessName}
                   </p>
-                  <p className="text-[10px] text-[#a1a1a1] leading-none whitespace-nowrap flex items-center gap-1">
+                  <p className="text-[10px] text-[#a1a1a1] leading-none whitespace-nowrap flex items-center gap-1 truncate" title={userProfile.walletAddress || userProfile.email}>
                     {userProfile.walletAddress ? (
                       <>
                         <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1489,28 +2157,32 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 
                 {/* Filter Tabs */}
                 <div className="flex items-center gap-1.5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-lg p-1">
-                  <button className="px-3.5 py-1.5 text-xs text-[#6a6a6a] hover:text-white font-medium transition-colors cursor-pointer">
-                    Today
-                  </button>
-                  <button className="px-3.5 py-1.5 text-xs text-[#6a6a6a] hover:text-white font-medium transition-colors cursor-pointer">
-                    Week
-                  </button>
-                  <button className="px-4 py-1.5 text-xs text-white rounded-md font-bold transition-all border border-[#2C2C2C] bg-[#161618] cursor-pointer"
-                          style={{
-                            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02), inset 0 -1px 1px rgba(0, 0, 0, 0.5)'
-                          }}>
-                    30 Days
-                  </button>
-                  <button className="px-3.5 py-1.5 text-xs text-[#6a6a6a] hover:text-white font-medium transition-colors cursor-pointer">
-                    All Time
-                  </button>
+                  {['Today', 'Week', '30 Days', 'All Time'].map((tf) => {
+                    const isActive = dashboardTimeframe === tf;
+                    return (
+                      <button
+                        key={tf}
+                        onClick={() => setDashboardTimeframe(tf)}
+                        className={`px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          isActive 
+                            ? 'text-white rounded-md border border-[#2C2C2C] bg-[#161618]' 
+                            : 'text-[#6a6a6a] hover:text-white font-medium'
+                        }`}
+                        style={isActive ? {
+                          boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02), inset 0 -1px 1px rgba(0, 0, 0, 0.5)'
+                        } : {}}
+                      >
+                        {tf}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Forecast Area Chart + AI Recommendations Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div id="coach-runway-chart" className="lg:col-span-2">
-                  <CashflowPrediction predictions={predictions} balance={balance} />
+                  <CashflowPrediction predictions={predictions} balance={balance} timeframe={dashboardTimeframe} />
                 </div>
                 <div id="coach-copilot-sidebar">
                   <AICopilot predictions={predictions} />
@@ -1523,6 +2195,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   invoices={invoices}
                   handleSettle={handleSettle}
                   handleSchedule={handleSchedule}
+                  handleReview={handleReview}
+                  automationLevel={userProfile.automationLevel}
                 />
               </div>
             </>
@@ -1541,6 +2215,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 handleSettle={handleSettle}
                 handleSchedule={handleSchedule}
                 handleUploadInvoice={handleUploadInvoice}
+                handleReview={handleReview}
+                automationLevel={userProfile.automationLevel}
               />
             </div>
           )}
@@ -1548,6 +2224,159 @@ export default function DashboardLayout({ setView, handleLogout }) {
           {currentPage === 'Payments' && (
             <div id="coach-payments-view" className="animate-fadeIn">
               <PaymentsView payments={payments} />
+            </div>
+          )}
+
+          {currentPage === 'Treasury' && (
+            <div id="coach-treasury-view" className="space-y-6 animate-fadeIn text-left animate-[slideIn_0.3s_ease-out]">
+              {/* Header Section */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#2C2C2C] pb-5">
+                <div>
+                  <h1 className="font-cormorant text-2xl sm:text-3xl text-white font-light tracking-wide flex items-center gap-2.5">
+                    <Landmark className="w-7 h-7 text-[#D4AF37] shrink-0 animate-pulse" />
+                    <span>Open Finance Treasury</span>
+                  </h1>
+                  <p className="text-[#6a6a6a] text-xs font-light mt-1.5 leading-relaxed">
+                    Securely monitor and manage your Philippine Peso commercial accounts and e-wallet balances.
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-3 py-1 text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <span>Brankas Secure Open Finance API</span>
+                </div>
+              </div>
+
+              {/* Aggregator Card Grid */}
+              <div className="glass-panel-gold rounded-3xl p-6 border border-[#D4AF37]/10 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-cormorant text-2xl font-light tracking-wide text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-gold-metallic" />
+                      Consolidated Treasury Ledger
+                    </h3>
+                    <p className="text-white/40 text-xs font-light mt-1">
+                      Aggregated Peso operating balances loaded across verified Southeast Asia commercial gateways.
+                    </p>
+                  </div>
+                  <div className="bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl px-6 py-4 flex flex-col items-start sm:items-end justify-center">
+                    <span className="text-[9px] uppercase tracking-widest text-[#6a6a6a] font-bold">Total Aggregated PHP Reserves</span>
+                    <span className="text-2xl font-bold font-outfit text-gold-metallic mt-1">
+                      ₱{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Institutions Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {(() => {
+                    const list = userProfile.linkedBanks || [];
+                    const banksToShow = list.length > 0 ? list : [
+                      { id: 'gcash', name: 'GCash Corporate Wallet', short: 'GCash', balance: 12500000.00, type: 'wallet', isLinked: bankLinked && bankName === 'GCash' },
+                      { id: 'bdo', name: 'Banco de Oro (BDO)', short: 'BDO', balance: 4500000.00, type: 'bank', isLinked: bankLinked && bankName === 'BDO' },
+                      { id: 'ubp', name: 'UnionBank of the Philippines', short: 'UnionBank', balance: 3200000.00, type: 'bank', isLinked: bankLinked && bankName === 'UnionBank' },
+                      { id: 'bpi', name: 'Bank of the Philippine Islands (BPI)', short: 'BPI', balance: 5800000.00, type: 'bank', isLinked: bankLinked && bankName === 'BPI' },
+                      { id: 'maya', name: 'Maya Business Account', short: 'Maya', balance: 1200000.00, type: 'wallet', isLinked: bankLinked && bankName === 'Maya' }
+                    ];
+
+                    return banksToShow.map((bank) => {
+                      const logoBg = bank.id === 'ubp' ? 'bg-[#FF6600]' :
+                                     bank.id === 'bdo' ? 'bg-[#0033A0]' :
+                                     bank.id === 'bpi' ? 'bg-[#980000]' :
+                                     bank.id === 'gcash' ? 'bg-[#005CE6]' :
+                                     bank.id === 'maya' ? 'bg-[#00E676]' : 'bg-[#D4AF37]';
+                      
+                      return (
+                        <div 
+                          key={bank.id}
+                          className="relative p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between min-h-[155px] hover:brightness-[1.12] hover:scale-[1.03] shadow-[0_8px_30px_rgba(0,0,0,0.85)] cursor-default"
+                          style={bank.isLinked ? {
+                            background: 'linear-gradient(135deg, #1f1f23 0%, #0f0f11 25%, #2a2a30 45%, #080809 60%, #151518 100%)',
+                            borderColor: 'rgba(212, 175, 55, 0.45)',
+                            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05), inset 0 -1px 1px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 175, 55, 0.05)'
+                          } : {
+                            background: 'linear-gradient(135deg, #151518 0%, #0a0a0c 35%, #1a1a1f 65%, #050506 100%)',
+                            borderColor: 'rgba(255, 255, 255, 0.06)',
+                            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02)',
+                            opacity: 0.65
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <BankLogo bankId={bank.id} className="h-9 w-9 shadow-md rounded-xl shrink-0" />
+                            {bank.isLinked ? (
+                              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                <ShieldCheck className="w-3 h-3 animate-pulse" /> Linked
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-white/30 font-light">Unlinked</span>
+                            )}
+                          </div>
+
+                          <div className="mt-4">
+                            <span className="text-[10px] text-white/40 block font-light truncate uppercase tracking-wider">{bank.name}</span>
+                            {bank.isLinked ? (
+                              <span className="text-base font-bold font-mono text-gold-metallic block mt-1 tracking-wider">
+                                ₱{parseFloat(bank.balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            ) : (
+                              <span className="text-base font-mono text-white/20 block mt-1 tracking-wider">₱0.00</span>
+                            )}
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                            <span className="text-[6.5px] font-mono tracking-[0.2em] text-white/20 uppercase font-bold select-none">
+                              FEHUVIA TREASURY
+                            </span>
+                            {bank.isLinked ? (
+                              <button
+                                onClick={() => handleUnlinkBank(bank.id)}
+                                className="text-[9px] font-bold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                              >
+                                Disconnect
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setSelectedBankToLink(bank);
+                                  setIsBankModalOpen(true);
+                                }}
+                                className="text-[9px] font-bold text-[#e4c37a] hover:text-[#f3d99d] transition-colors cursor-pointer"
+                              >
+                                + Connect Link
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentPage === 'Bridge' && (
+            <div id="coach-bridge-view" className="animate-fadeIn">
+              <BridgeView
+                userProfile={userProfile}
+                balance={balance}
+                walletUSDCBalance={walletUSDCBalance}
+                exchangeRate={exchangeRate}
+                fetchProfile={fetchProfile}
+                fetchPayments={fetchPayments}
+                setToast={setToast}
+                setNotifications={setNotifications}
+                setWalletUSDCBalance={setWalletUSDCBalance}
+                setDemoUSDCBalance={setDemoUSDCBalance}
+                prefilledBridgeInvoice={prefilledBridgeInvoice}
+                setPrefilledBridgeInvoice={setPrefilledBridgeInvoice}
+                setCurrentPage={setCurrentPage}
+                executeSettlement={executeSettlement}
+                onOpenBankLink={(bank) => {
+                  setSelectedBankToLink(bank);
+                  setIsBankModalOpen(true);
+                }}
+              />
             </div>
           )}
 
@@ -1566,8 +2395,13 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 bankLinked={bankLinked}
                 bankName={bankName}
                 bankBalance={balance}
-                onOpenBankLink={() => setIsBankModalOpen(true)}
+                onOpenBankLink={() => {
+                  setSelectedBankToLink({ id: 'bdo', name: 'Banco de Oro (BDO)', short: 'BDO', balance: 4500000.00, type: 'bank', isLinked: false });
+                  setIsBankModalOpen(true);
+                }}
                 onDisconnectBank={handleDisconnectBank}
+                handleUpdateAutomationLevel={handleUpdateAutomationLevel}
+                onResetDemo={handleResetDemoState}
               />
             </div>
           )}
@@ -1619,7 +2453,16 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 Connect EVM Wallet
               </button>
 
-              <p className="text-[10px] text-white/30 font-light mt-6 flex items-center gap-1.5 justify-center">
+              <a 
+                href="https://faucet.morph.network/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[10px] text-[#D4AF37] hover:underline mt-4 inline-flex items-center gap-1 font-bold uppercase tracking-wider cursor-pointer"
+              >
+                Request Morph L2 Gas ETH ↗
+              </a>
+
+              <p className="text-[10px] text-white/30 font-light mt-4 flex items-center gap-1.5 justify-center">
                 <span className="h-1.5 w-1.5 rounded-full bg-zinc-600 animate-pulse"></span>
                 Status: Awaiting Morph L2 Key Link
               </p>
@@ -1629,11 +2472,438 @@ export default function DashboardLayout({ setView, handleLogout }) {
         
       </main>
       <DemoDisclaimer compact />
-      
+
+      {/* Dynamic Manual Review Checklist Modal */}
+      {reviewModal.isOpen && reviewModal.invoice && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg animate-[fadeIn_0.2s_ease-out] font-outfit text-white">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-lg p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/35 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setReviewModal({ isOpen: false, invoice: null })}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="h-14 w-14 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic mx-auto mb-3 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+                <ShieldAlert className="w-7 h-7" />
+              </div>
+              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                Treasury Manual Review
+              </h3>
+              <p className="text-white/40 text-xs font-light mt-1">
+                AI Copilot flagged invoice <span className="font-mono text-[#D4AF37] font-semibold">{reviewModal.invoice.id}</span> for multi-factor authorization.
+              </p>
+            </div>
+
+            {/* Invoice Details Card */}
+            <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] space-y-2 mb-6">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#6a6a6a]">Supplier:</span>
+                <span className="font-bold text-white">{reviewModal.invoice.supplier}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#6a6a6a]">Amount:</span>
+                <span className="font-black text-white">${reviewModal.invoice.amount.toLocaleString(undefined, {minimumFractionDigits: 2})} USDC</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#6a6a6a]">Due Date:</span>
+                <span className="text-white/70">{reviewModal.invoice.dueDate}</span>
+              </div>
+              <div className="pt-2 border-t border-white/5 text-[11px] text-amber-400 font-light leading-relaxed">
+                <span className="font-semibold uppercase tracking-wider block mb-1">AI Recommendation Reason:</span>
+                {reviewModal.invoice.aiAction.reason}
+              </div>
+            </div>
+
+            {/* Checklist Items */}
+            <div className="space-y-3.5 mb-6">
+              <span className="text-[10px] uppercase tracking-wider text-[#6a6a6a] font-bold block mb-1">Manual Verification Checklist</span>
+              
+              {[
+                { id: 'whitelist', label: 'Verify recipient wallet address matches approved vendor whitelist.' },
+                { id: 'procurement', label: 'Match invoice metadata against purchase orders & service logs.' },
+                { id: 'limits', label: 'Confirm amount lies within your corporate daily spending limits.' },
+                { id: 'runway', label: 'Evaluate runway projection models & Morph L2 gas requirements.' }
+              ].map((item) => (
+                <label
+                  key={item.id}
+                  className="flex items-start gap-3 p-3 rounded-xl border border-white/5 bg-[#121214]/40 hover:bg-[#161619] transition-all cursor-pointer select-none group"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-[#2C2C2C] text-[#D4AF37] focus:ring-[#D4AF37] h-4 w-4 bg-black cursor-pointer"
+                    checked={checkedItems[item.id] || false}
+                    onChange={(e) => setCheckedItems(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                  />
+                  <span className="text-xs text-white/70 leading-relaxed font-light group-hover:text-white transition-colors">
+                    {item.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {/* Actions Footer */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  const allChecked = ['whitelist', 'procurement', 'limits', 'runway'].every(k => checkedItems[k]);
+                  if (!allChecked) {
+                    setToast({
+                      show: true,
+                      message: 'Please verify all checklist items before executing smart settlement.',
+                      txHash: 'Checklist Incomplete'
+                    });
+                    return;
+                  }
+                  
+                  // Execute settlement!
+                  setReviewModal({ isOpen: false, invoice: null });
+                  executeSettlement(reviewModal.invoice.id);
+                }}
+                className="bg-gold-metallic text-black font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 cursor-pointer transform hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_12px_rgba(212,175,55,0.25)] hover:box-gold-glow flex items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Approve & Settle
+              </button>
+
+              <button
+                onClick={() => {
+                  // Schedule postponement
+                  setReviewModal({ isOpen: false, invoice: null });
+                  handleSchedule(reviewModal.invoice.id);
+                }}
+                className="bg-[#1c1c1e] hover:bg-[#27272a] text-white border border-[#2C2C2C] font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Calendar className="w-4 h-4" />
+                Postpone Schedule
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Calendar Postpone Modal */}
+      {scheduleModal.isOpen && scheduleModal.invoice && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg animate-[fadeIn_0.2s_ease-out] font-outfit text-white">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/35 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setScheduleModal({ isOpen: false, invoice: null })}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="h-14 w-14 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic mx-auto mb-3 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+                <Calendar className="w-7 h-7" />
+              </div>
+              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                Postpone B2B Settlement
+              </h3>
+              <p className="text-white/40 text-xs font-light mt-1">
+                Select a manual post-due date to schedule payment optimization paths.
+              </p>
+            </div>
+
+            {/* Invoice Details mini card */}
+            <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] space-y-1.5 mb-6 text-xs font-light">
+              <div className="flex justify-between">
+                <span className="text-[#6a6a6a]">Supplier / Vendor:</span>
+                <span className="font-bold text-white">{scheduleModal.invoice.supplier}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6a6a6a]">Settlement Amount:</span>
+                <span className="font-bold text-white">${scheduleModal.invoice.amount.toLocaleString()} USDC</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6a6a6a]">Original Due Date:</span>
+                <span className="text-white/70 font-mono">{scheduleModal.invoice.dueDate}</span>
+              </div>
+            </div>
+
+            {/* Calendar Component Grid */}
+            <div className="mb-6">
+              {renderCalendar(scheduleModal.invoice)}
+            </div>
+
+            {/* Actions Footer */}
+            <button
+              onClick={() => executeScheduling(scheduleModal.invoice.id, selectedScheduleDate)}
+              disabled={!selectedScheduleDate}
+              className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-xl py-4 cursor-pointer transform hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_15px_rgba(212,175,55,0.25)] flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Confirm Scheduled Path</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic L2-to-Bank Off-ramp Bridge Modal */}
+      {showOffRampModal && offRampInvoice && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg animate-[fadeIn_0.2s_ease-out] font-outfit text-white">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/35 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                if (offRampStep === 0 || offRampStep === 4) {
+                  setShowOffRampModal(false);
+                  setOffRampInvoice(null);
+                  setOffRampStep(0);
+                }
+              }}
+              disabled={offRampStep > 0 && offRampStep < 4}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer disabled:opacity-20"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <Layers className="w-12 h-12 text-[#D4AF37] mx-auto mb-3 animate-pulse" />
+              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white flex items-center justify-center gap-2">
+                <Landmark className="w-5 h-5 text-[#D4AF37] shrink-0" />
+                <span>L2-to-Bank Off-Ramp Bridge</span>
+              </h3>
+              <p className="text-white/40 text-xs font-light mt-1">
+                Clearing physical fiat obligations by programmatically off-ramping Morph stablecoins.
+              </p>
+            </div>
+
+            {/* Wallet vs Destination Account comparisons */}
+            <div className="space-y-3 mb-6">
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Buyer Wallet (Source)</span>
+                  <span className="text-xs font-bold text-white block mt-1 font-mono">
+                    ${walletUSDCBalance.toLocaleString(undefined, {minimumFractionDigits:2})} USDC
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Settle Amount</span>
+                  <span className="text-xs font-extrabold text-gold-metallic block mt-1 font-mono">
+                    ${offRampInvoice.amount.toLocaleString()} USDC
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Supplier (Recipient)</span>
+                  <span className="text-xs font-bold text-white block mt-1">
+                    {offRampInvoice.supplier}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Bank Account Destination</span>
+                  <span className="text-xs font-extrabold text-emerald-400 block mt-1 font-mono">
+                    {offRampInvoice.supplierWallet}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step loader or details */}
+            {offRampStep === 0 ? (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl border border-[#D4AF37]/15 bg-[#D4AF37]/5 flex gap-2.5 items-start">
+                  <ShieldCheck className="w-4 h-4 text-gold-metallic shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-orange-200 leading-relaxed font-light">
+                    Fehuvia's L2 Off-Ramp Gateway will lock stablecoins on Morph, trigger StraitsX L2 liquidity pools, and programmatically wire direct Peso fiat via PESONet/InstaPay banking APIs.
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleExecuteOffRamp}
+                  className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+                >
+                  Execute Off-Ramp Payout
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Step indicator animations */}
+                <div className="p-5 border border-dashed border-[#D4AF37]/20 bg-[#D4AF37]/5 rounded-2xl flex flex-col items-center justify-center text-center relative overflow-hidden">
+                  {offRampStep < 4 && (
+                    <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent animate-scanLine" style={{ top: 0 }}></div>
+                  )}
+                  
+                  {offRampStep < 4 ? (
+                    <div className="w-8 h-8 rounded-full border-2 border-[#D4AF37]/35 border-t-[#D4AF37] animate-spin mb-3"></div>
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3 text-emerald-400 animate-[fadeIn_0.2s_ease-out]">
+                      <Check className="w-4 h-4" />
+                    </div>
+                  )}
+
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    {offRampStep === 4 ? 'Off-Ramp Disbursed!' : 'Processing L2 Off-Ramp'}
+                  </span>
+                  <p className="text-[10px] text-white/60 leading-relaxed font-light mt-2 animate-pulse">
+                    {offRampStatus}
+                  </p>
+                </div>
+
+                {offRampStep === 4 && (
+                  <button
+                    onClick={() => {
+                      setShowOffRampModal(false);
+                      setOffRampInvoice(null);
+                      setOffRampStep(0);
+                    }}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+                  >
+                    Done & Return
+                  </button>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Fiat-to-USDC Liquidity Bridge Modal */}
+      {showBridgeModal && bridgeInvoice && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg animate-[fadeIn_0.2s_ease-out] font-outfit text-white">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/35 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                if (bridgeStep === 0 || bridgeStep === 4) {
+                  setShowBridgeModal(false);
+                  setBridgeInvoice(null);
+                  setBridgeStep(0);
+                }
+              }}
+              disabled={bridgeStep > 0 && bridgeStep < 4}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer disabled:opacity-20"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <ShieldAlert className="w-12 h-12 text-[#fb923c] mx-auto mb-3 animate-pulse" />
+              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                ⚠️ Insufficient Stablecoins
+              </h3>
+              <p className="text-white/40 text-xs font-light mt-1">
+                Your Morph L2 Key lacks the USDC stablecoins needed to settle this invoice.
+              </p>
+            </div>
+
+            {/* Wallet vs GCash comparisons */}
+            <div className="space-y-3 mb-6">
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Connected Wallet</span>
+                  <span className="text-xs font-bold text-red-400 block mt-1">
+                    ${walletUSDCBalance.toLocaleString(undefined, {minimumFractionDigits:2})} USDC
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Required Amount</span>
+                  <span className="text-xs font-extrabold text-white block mt-1 font-mono">
+                    ${bridgeInvoice.amount.toLocaleString()} USDC
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">GCash Business Wallet</span>
+                  <span className="text-xs font-bold text-emerald-400 block mt-1">
+                    ₱{balance.toLocaleString(undefined, {minimumFractionDigits:2})} PHP
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Convert PHP Value</span>
+                  <span className="text-xs font-extrabold text-emerald-400 block mt-1">
+                    ₱{(bridgeInvoice.amount * exchangeRate).toLocaleString(undefined, {minimumFractionDigits:2})} PHP
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step loader or details */}
+            {bridgeStep === 0 ? (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl border border-[#D4AF37]/15 bg-[#D4AF37]/5 flex gap-2.5 items-start">
+                  <ShieldCheck className="w-4 h-4 text-gold-metallic shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-orange-200 leading-relaxed font-light">
+                    Fehuvia's Fiat Liquidity Bridge will automatically debit GCash, convert the funds through our StraitsX pool at the live rate (₱{exchangeRate.toFixed(2)}), and mint matching USDC directly into your L2 wallet.
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleExecuteBridge}
+                  className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+                >
+                  Execute Conversion Bridge
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Step indicator animations */}
+                <div className="p-5 border border-dashed border-[#D4AF37]/20 bg-[#D4AF37]/5 rounded-2xl flex flex-col items-center justify-center text-center relative overflow-hidden">
+                  {bridgeStep < 4 && (
+                    <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent animate-scanLine" style={{ top: 0 }}></div>
+                  )}
+                  
+                  {bridgeStep < 4 ? (
+                    <div className="w-8 h-8 rounded-full border-2 border-[#D4AF37]/35 border-t-[#D4AF37] animate-spin mb-3"></div>
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3 text-emerald-400 animate-[fadeIn_0.2s_ease-out]">
+                      <Check className="w-4 h-4" />
+                    </div>
+                  )}
+
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    {bridgeStep === 4 ? 'Bridge Complete!' : 'Executing Conversion Bridge'}
+                  </span>
+                  <p className="text-[10px] text-white/60 leading-relaxed font-light mt-2 animate-pulse">
+                    {bridgeStatus}
+                  </p>
+                </div>
+
+                {bridgeStep === 4 && (
+                  <button
+                    onClick={() => {
+                      setShowBridgeModal(false);
+                      setBridgeInvoice(null);
+                      setBridgeStep(0);
+                    }}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+                  >
+                    Return & Settle Invoice
+                  </button>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
       {/* simulated Philippine Brankas Open Banking Modal */}
       <BrankasLinkModal 
         isOpen={isBankModalOpen}
-        onClose={() => setIsBankModalOpen(false)}
+        initialBank={selectedBankToLink}
+        onClose={() => {
+          setIsBankModalOpen(false);
+          setSelectedBankToLink(null);
+        }}
         onLinkSuccess={handleLinkBankSuccess}
       />
 

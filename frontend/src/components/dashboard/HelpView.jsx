@@ -189,6 +189,17 @@ export function HelpView({ onStartTour }) {
                 <span className="text-[#6a6a6a]">Morph L2 Gas Limit</span>
                 <span className="font-mono text-emerald-400 font-bold">&lt; 0.0001 ETH</span>
               </div>
+              <div className="flex items-center justify-between border-t border-[#1b1b1d] pt-2 mt-1 text-[11px]">
+                <span className="text-[#6a6a6a]">Morph L2 Faucet</span>
+                <a 
+                  href="https://faucet.morph.network/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="font-bold text-gold-metallic hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  Get Gas ETH ↗
+                </a>
+              </div>
             </div>
 
             {/* Retake Tour Button */}

@@ -9,7 +9,8 @@ export function ProfileView({
   bankName = '',
   bankBalance = 0,
   onOpenBankLink,
-  onDisconnectBank
+  onDisconnectBank,
+  handleUpdateAutomationLevel
 }) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [riskTolerance, setRiskTolerance] = useState(65); // percentage slider
@@ -32,7 +33,7 @@ export function ProfileView({
   };
 
   const userEmail = userProfile.email || 'admin@fehuvia.com';
-  const username = userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ' User';
+  const businessName = userProfile.username || userEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ' Corp';
   const isConnected = !!userProfile.walletAddress;
   const walletAddress = userProfile.walletAddress || 'Not Connected';
 
@@ -157,11 +158,11 @@ export function ProfileView({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">Username</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-2">Business Name</label>
                 <input
                   type="text"
                   readOnly
-                  value={username}
+                  value={businessName}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/60 focus:outline-none cursor-not-allowed font-light text-sm"
                 />
               </div>
@@ -248,6 +249,30 @@ export function ProfileView({
                 Recommended threshold: <span className="text-gold-metallic font-bold">65%</span> (Balanced Mode)
               </div>
             </div>
+
+            {/* Automation Mode Tabs Selector */}
+            <div className="mt-6 pt-6 border-t border-white/5 space-y-4">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#e4c37a]/80 block">Workstation Automation Mode</span>
+              <div className="grid grid-cols-3 gap-1.5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-xl p-1">
+                {[
+                  { id: 'auto', label: 'Auto' },
+                  { id: 'semi', label: 'Co-Pilot' },
+                  { id: 'manual', label: 'Manual' }
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleUpdateAutomationLevel && handleUpdateAutomationLevel(opt.id)}
+                    className={`py-2 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                      (userProfile.automationLevel || 'semi') === opt.id
+                        ? 'bg-[#161618] border border-[#2C2C2C] text-[#D4AF37]'
+                        : 'text-[#6a6a6a] hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Card 2: AI Automation Switches */}
@@ -259,24 +284,44 @@ export function ProfileView({
 
             {[
               {
+                id: 'aiRecommendations',
+                title: 'AI Recommendations',
+                desc: 'Enable strategic CFO forecasts & guides',
+                value: userProfile.automationLevel !== 'manual',
+                onToggle: () => {
+                  const nextLevel = userProfile.automationLevel === 'manual' ? 'semi' : 'manual';
+                  if (handleUpdateAutomationLevel) {
+                    handleUpdateAutomationLevel(nextLevel);
+                  }
+                }
+              },
+              {
                 id: 'autoOptimize',
                 title: 'Auto-Optimize Railing',
                 desc: 'Instantly schedule delay paths',
+                value: toggles.autoOptimize,
+                onToggle: () => handleToggle('autoOptimize')
               },
               {
                 id: 'discountCapture',
                 title: 'Capture Early Discounts',
                 desc: 'Prioritize prompt T+0 cash back',
+                value: toggles.discountCapture,
+                onToggle: () => handleToggle('discountCapture')
               },
               {
                 id: 'postponeWarning',
                 title: 'Pre-Payment Verification',
                 desc: 'Mandatory human approval logs',
+                value: toggles.postponeWarning,
+                onToggle: () => handleToggle('postponeWarning')
               },
               {
                 id: 'auditTrail',
                 title: 'On-chain Audit Trails',
                 desc: 'Write settled details to Morph L2',
+                value: toggles.auditTrail,
+                onToggle: () => handleToggle('auditTrail')
               }
             ].map((toggle) => (
               <div key={toggle.id} className="flex items-center justify-between gap-4">
@@ -286,10 +331,10 @@ export function ProfileView({
                 </div>
                 
                 <button
-                  onClick={() => handleToggle(toggle.id)}
+                  onClick={toggle.onToggle}
                   className="text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
                 >
-                  {toggles[toggle.id] ? (
+                  {toggle.value ? (
                     <ToggleRight className="w-9 h-9 text-[#D4AF37]" />
                   ) : (
                     <ToggleLeft className="w-9 h-9 text-[#6a6a6a]" />
@@ -298,6 +343,30 @@ export function ProfileView({
               </div>
             ))}
           </div>
+
+          {/* Presentation Demo Utilities Panel */}
+          {onResetDemo && (
+            <div className="mt-8 border-t border-white/5 pt-6 space-y-4">
+              <div className="flex items-center gap-2 text-gold-metallic">
+                <Sparkles className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Presentation Demo Mode</span>
+              </div>
+              <div className="p-4 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/5 space-y-3">
+                <p className="text-[10px] text-white/70 leading-relaxed font-light">
+                  Fehuvia is operating in presentation sandbox mode. You can instantly restore all invoices, GCash linkages, Cashflow runway logs, and wallet balances to pristine seeded states for pitch demonstrations.
+                </p>
+                <button
+                  onClick={onResetDemo}
+                  className="w-full py-2 rounded-lg bg-gold-metallic hover:brightness-110 active:scale-[0.98] text-black text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                  style={{
+                    boxShadow: '0 2px 8px rgba(212, 175, 55, 0.25)'
+                  }}
+                >
+                  Reset Demo Database
+                </button>
+              </div>
+            </div>
+          )}
 
         </div>
 

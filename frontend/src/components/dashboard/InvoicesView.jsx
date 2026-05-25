@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle, Clock, AlertCircle, Search, Plus, X, Upload, ShieldAlert, FileText, Check, ShieldCheck } from 'lucide-react';
 
-export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUploadInvoice }) {
+export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUploadInvoice, handleReview, automationLevel }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   
@@ -19,6 +19,52 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
     aiStatus: 'safe'
   });
 
+  const [partnerDetails, setPartnerDetails] = useState({ checked: false, isPartner: false, wallet: '' });
+
+  React.useEffect(() => {
+    if (!newInvoice.supplier || newInvoice.supplier.trim().length < 3) {
+      setPartnerDetails({ checked: false, isPartner: false, wallet: '' });
+      return;
+    }
+
+    const checkTimeout = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('fehuvia_token');
+        const API_BASE = 'http://localhost:3001';
+        
+        const res = await fetch(`${API_BASE}/api/suppliers/check?name=${encodeURIComponent(newInvoice.supplier.trim())}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.exists) {
+            setPartnerDetails({ checked: true, isPartner: true, wallet: data.walletAddress });
+          } else {
+            setPartnerDetails({ checked: true, isPartner: false, wallet: '' });
+          }
+        }
+      } catch (err) {
+        console.error('Error checking supplier details:', err);
+      }
+    }, 400);
+
+    return () => clearTimeout(checkTimeout);
+  }, [newInvoice.supplier]);
+
+  const formatScheduledDate = (dueDate) => {
+    if (!dueDate) return '';
+    const dateParts = dueDate.split('-');
+    if (dateParts.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const mIdx = parseInt(dateParts[1], 10) - 1;
+      const day = parseInt(dateParts[2], 10);
+      if (mIdx >= 0 && mIdx < 12) {
+        return `${months[mIdx]} ${day}`;
+      }
+    }
+    return dueDate;
+  };
+
   const getActionBadge = (invoice) => {
     if (invoice.settled) {
       return (
@@ -32,7 +78,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-950/20 text-[#fb923c] border-[#fb923c]/20 text-xs font-semibold uppercase tracking-wider">
           <Clock className="w-4 h-4" />
-          <span>Scheduled</span>
+          <span>Scheduled ({formatScheduledDate(invoice.dueDate)})</span>
         </span>
       );
     }
@@ -74,88 +120,121 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
   });
 
   // Handle mock sandbox invoice scan
-  const handleMockScan = (mockType) => {
+  const handleMockScan = async (mockType) => {
     setScanning(true);
     setOcrSuccess(false);
-    setScanStatus('AI Copilot: Accessing document layer...');
-    
-    setTimeout(() => {
-      setScanStatus('AI Copilot: Running deep OCR layout analysis...');
-    }, 800);
+    setScanStatus('AI Copilot: Triggering server-side sandbox scan query...');
 
-    setTimeout(() => {
-      setScanStatus('AI Copilot: Extracting corporate metadata & safety scores...');
-    }, 1600);
+    const filenames = {
+      morph: 'morph_logistics_invoice.pdf',
+      cyber: 'cyber_security_audit_group.png',
+      elite: 'elite_office_materials_order.pdf'
+    };
 
-    setTimeout(() => {
-      let data = {};
-      if (mockType === 'morph') {
-        data = {
-          supplier: 'Morph Logistics Corp',
-          amount: '4500.00',
-          dueDate: '2026-06-15'
-        };
-      } else if (mockType === 'cyber') {
-        data = {
-          supplier: 'Cyber Security Audit Group',
-          amount: '15000.00',
-          dueDate: '2026-06-25'
-        };
-      } else if (mockType === 'elite') {
-        data = {
-          supplier: 'Elite Office Materials',
-          amount: '72000.00',
-          dueDate: '2026-07-02'
-        };
-      }
-      setNewInvoice({
-        ...newInvoice,
-        ...data
+    try {
+      const token = localStorage.getItem('fehuvia_token');
+      const API_BASE = 'http://localhost:3001';
+      
+      const res = await fetch(`${API_BASE}/api/invoices/scan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filename: filenames[mockType]
+        })
       });
+
+      if (!res.ok) throw new Error('OCR parsing failed');
+      
+      const data = await res.json();
+      
+      setTimeout(() => {
+        setScanStatus('AI Copilot: Decompressing layout metrics from backend...');
+      }, 700);
+
+      setTimeout(() => {
+        setScanStatus(`AI Copilot: ${data.scanLogs[1]}`);
+      }, 1400);
+
+      setTimeout(() => {
+        setNewInvoice({
+          ...newInvoice,
+          supplier: data.supplier,
+          amount: data.amount,
+          dueDate: data.dueDate
+        });
+        setScanning(false);
+        setOcrSuccess(true);
+        setScanStatus(`AI Copilot: OCR Sandbox scan successful! Indexed $${Number(data.amount).toLocaleString()} invoice.`);
+        setModalTab('manual'); // automatically switch to manual tab to show the populated details!
+      }, 2100);
+
+    } catch (err) {
+      console.error(err);
       setScanning(false);
-      setOcrSuccess(true);
-      setScanStatus('AI Copilot: Document successfully indexed and scanned!');
-      setModalTab('manual'); // automatically switch to manual tab to show the populated details!
-    }, 2400);
+      setOcrSuccess(false);
+      setScanStatus('AI Copilot: Backend query failed. Check server status.');
+    }
   };
 
   // Handle actual custom local invoice image/file upload
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setScanning(true);
     setOcrSuccess(false);
-    setScanStatus('AI Copilot: Accessing uploaded document...');
-    
-    setTimeout(() => {
-      setScanStatus('AI Copilot: Running convolutional document character parsing...');
-    }, 800);
+    setScanStatus('AI Copilot: Submitting document to server-side parser...');
 
-    setTimeout(() => {
-      setScanStatus('AI Copilot: Indexing table objects & safety parameters...');
-    }, 1600);
-
-    setTimeout(() => {
-      const parsedAmount = Math.floor(Math.random() * 85000) + 1500;
-      const suppliers = ['Morph Logistics Corp', 'Cyber Security Audit Group', 'Elite Office Materials', 'Apex Telecom Inc', 'Brankas Tech Ltd'];
-      const randomSupplier = suppliers[Math.floor(Math.random() * suppliers.length)];
+    try {
+      const token = localStorage.getItem('fehuvia_token');
+      const API_BASE = 'http://localhost:3001';
       
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + Math.floor(Math.random() * 20) + 5);
-      const randomDueDate = futureDate.toISOString().substring(0, 10);
-
-      setNewInvoice({
-        ...newInvoice,
-        supplier: randomSupplier,
-        amount: parsedAmount.toString(),
-        dueDate: randomDueDate
+      const res = await fetch(`${API_BASE}/api/invoices/scan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          fileSize: file.size
+        })
       });
+
+      if (!res.ok) throw new Error('OCR parsing failed');
+      
+      const data = await res.json();
+      
+      setTimeout(() => {
+        setScanStatus('AI Copilot: Running deep character alignment matrices...');
+      }, 700);
+
+      setTimeout(() => {
+        setScanStatus(`AI Copilot: ${data.scanLogs[1]}`);
+      }, 1400);
+
+      setTimeout(() => {
+        setNewInvoice({
+          ...newInvoice,
+          supplier: data.supplier,
+          amount: data.amount,
+          dueDate: data.dueDate
+        });
+        setScanning(false);
+        setOcrSuccess(true);
+        setScanStatus(`AI Copilot: Dynamic extraction successful! Parsed invoice of $${Number(data.amount).toLocaleString()} from ${data.supplier}`);
+        setModalTab('manual'); // automatically switch to manual tab to show the populated details!
+      }, 2100);
+
+    } catch (err) {
+      console.error(err);
       setScanning(false);
-      setOcrSuccess(true);
-      setScanStatus(`AI Copilot: Extraction successful! Parsed invoice of $${parsedAmount.toLocaleString()} from ${randomSupplier}`);
-      setModalTab('manual'); // automatically switch to manual tab to show the populated details!
-    }, 2400);
+      setOcrSuccess(false);
+      setScanStatus('AI Copilot: OCR parsing engine offline. Check server connection.');
+    }
   };
 
   // Live dynamic AI recommendation calculations for manual review
@@ -378,6 +457,25 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                     value={newInvoice.supplier}
                     onChange={e => setNewInvoice({ ...newInvoice, supplier: e.target.value })}
                   />
+                  
+                  {/* Real-time Connection Directory Lookup */}
+                  {partnerDetails.checked && (
+                    <div className="mt-2 animate-[fadeIn_0.2s_ease-out] flex items-center gap-1.5 px-3 py-2.5 rounded-lg border text-[10px] border-[#2C2C2C] bg-[#0a0a0c]/80 text-white/50">
+                      {partnerDetails.isPartner ? (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#D4AF37] animate-pulse"></span>
+                          <span className="text-[#D4AF37] font-semibold uppercase tracking-wider">Fehuvia Partner Found</span>
+                          <span className="text-white/40 font-light">— Clears via peer-to-peer Morph L2 USDC</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-600 animate-pulse"></span>
+                          <span className="text-white/40 font-semibold uppercase tracking-wider">Fiat Off-Ramp Route</span>
+                          <span className="text-white/40 font-light">— Clears via StraitsX / GCash bank wire</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -518,7 +616,23 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                 return (
                   <tr key={invoice.id} className="border-b border-[#161618] hover:bg-white/[0.01] transition-colors">
                     <td className="py-4 px-4 text-sm font-mono text-white/70">{invoice.id}</td>
-                    <td className="py-4 px-4 text-sm font-bold text-white">{invoice.supplier}</td>
+                    <td className="py-4 px-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-white leading-none">{invoice.supplier}</span>
+                          {invoice.hasFehuviaAccount ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 uppercase tracking-wider animate-pulse">
+                              Partner
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-white/5 text-white/40 border border-white/10 uppercase tracking-wider">
+                              Off-Ramp
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-white/30 font-mono mt-1 block truncate max-w-[160px]">{invoice.supplierWallet}</span>
+                      </div>
+                    </td>
                     <td className="py-4 px-4 text-sm font-extrabold text-white">${invoice.amount.toLocaleString()}</td>
                     <td className="py-4 px-4 text-sm text-[#a1a1a1]">{invoice.dueDate}</td>
                     <td className="py-4 px-4">{getActionBadge(invoice)}</td>
@@ -529,10 +643,32 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                           <span>Cleared T+0</span>
                         </span>
                       ) : invoice.scheduled ? (
-                        <span className="text-xs text-[#fb923c] font-bold uppercase tracking-widest inline-flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Scheduled</span>
-                        </span>
+                        (() => {
+                          const todayStr = (() => {
+                            const d = new Date();
+                            const y = d.getFullYear();
+                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            return `${y}-${m}-${day}`;
+                          })();
+                          const isPastOrToday = invoice.dueDate <= todayStr;
+                          if (isPastOrToday) {
+                            return (
+                              <button
+                                onClick={() => handleSettle(invoice.id)}
+                                className="px-4 py-2 rounded bg-gold-metallic text-black text-xs font-bold uppercase tracking-wider cursor-pointer hover:scale-[1.01] transition-all float-right"
+                              >
+                                Settle Now
+                              </button>
+                            );
+                          }
+                          return (
+                            <span className="text-xs text-[#fb923c] font-bold uppercase tracking-widest inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Scheduled ({formatScheduledDate(invoice.dueDate)})</span>
+                            </span>
+                          );
+                        })()
                       ) : invoice.loading ? (
                         <button disabled className="px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white/50 text-[10px] font-bold uppercase tracking-wider flex items-center float-right">
                           <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-[#D4AF37]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -543,7 +679,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                         </button>
                       ) : (
                         <div className="flex gap-2 justify-end">
-                          {isSafe && (
+                          {(isSafe || automationLevel === 'manual') && (
                             <button
                               onClick={() => handleSettle(invoice.id)}
                               className="px-4 py-2 rounded bg-gold-metallic text-black text-xs font-bold uppercase tracking-wider cursor-pointer hover:scale-[1.01] transition-all"
@@ -551,7 +687,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                               Settle via Morph
                             </button>
                           )}
-                          {isDelay && (
+                          {(isDelay || automationLevel === 'manual') && (
                             <button
                               onClick={() => handleSchedule(invoice.id)}
                               className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#2a2a2d] hover:text-white border border-[#2C2C2C] text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-colors"
@@ -559,9 +695,9 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                               Schedule
                             </button>
                           )}
-                          {isReview && (
+                          {(isReview && automationLevel !== 'manual') && (
                             <button
-                              onClick={() => handleSchedule(invoice.id)}
+                              onClick={() => handleReview(invoice.id)}
                               className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#2a2a2d] hover:text-white border border-[#2C2C2C] text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-colors"
                             >
                               Review
@@ -608,7 +744,18 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Supplier</span>
-                    <span className="text-sm font-bold text-white">{invoice.supplier}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-white">{invoice.supplier}</span>
+                      {invoice.hasFehuviaAccount ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 uppercase tracking-wider animate-pulse">
+                          Partner
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold bg-white/5 text-white/40 border border-white/10 uppercase tracking-wider">
+                          Off-Ramp
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block font-light">Amount</span>
@@ -630,10 +777,32 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                         <span>Cleared</span>
                       </span>
                     ) : invoice.scheduled ? (
-                      <span className="text-xs text-[#fb923c] font-bold uppercase tracking-wider flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Scheduled</span>
-                      </span>
+                      (() => {
+                        const todayStr = (() => {
+                          const d = new Date();
+                          const y = d.getFullYear();
+                          const m = String(d.getMonth() + 1).padStart(2, '0');
+                          const day = String(d.getDate()).padStart(2, '0');
+                          return `${y}-${m}-${day}`;
+                        })();
+                        const isPastOrToday = invoice.dueDate <= todayStr;
+                        if (isPastOrToday) {
+                          return (
+                            <button
+                              onClick={() => handleSettle(invoice.id)}
+                              className="px-4 py-2 rounded bg-gold-metallic text-black text-xs font-bold uppercase tracking-wider cursor-pointer hover:scale-[1.01] transition-all"
+                            >
+                              Settle T+0
+                            </button>
+                          );
+                        }
+                        return (
+                          <span className="text-xs text-[#fb923c] font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Scheduled ({formatScheduledDate(invoice.dueDate)})</span>
+                          </span>
+                        );
+                      })()
                     ) : invoice.loading ? (
                       <button
                         disabled
@@ -647,7 +816,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                       </button>
                     ) : (
                       <div className="flex gap-2 w-full justify-end">
-                        {isSafe && (
+                        {(isSafe || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSettle(invoice.id)}
                             className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer w-full text-center"
@@ -661,7 +830,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                             Settle T+0
                           </button>
                         )}
-                        {isDelay && (
+                        {(isDelay || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSchedule(invoice.id)}
                             className="px-3 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
@@ -669,9 +838,9 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                             Schedule
                           </button>
                         )}
-                        {isReview && (
+                        {(isReview && automationLevel !== 'manual') && (
                           <button
-                            onClick={() => handleSchedule(invoice.id)}
+                            onClick={() => handleReview(invoice.id)}
                             className="px-3 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
                           >
                             Review

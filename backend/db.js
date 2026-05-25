@@ -1,5 +1,8 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// Parse PostgreSQL DATE columns (OID 1082) as raw string to prevent timezone shifts
+types.setTypeParser(1082, val => val);
 
 const connectionString = process.env.DATABASE_URL;
 

@@ -65,11 +65,11 @@ export default function ArchitectureView({ onClose, setView }) {
       layer: 'On-chain Smart Contracts (Morph L2)',
       icon: Database,
       tech: 'Solidity / ERC-20 stablecoins / Automated Discounting',
-      desc: 'Escrows pool deposits. Automatically handles factoring discounts and instant stablecoin payouts directly to vendor addresses upon clearance verification.',
+      desc: 'Escrows pool deposits. Natively clears peer-to-peer Morph L2 USDC transfers between registered Fehuvia businesses, and integrates dynamic off-ramp layers (StraitsX/Brankas APIs) to disburse instant L2-to-Bank local fiat currency.',
       details: [
         { label: 'Asset Support', val: 'USDC / USDT Native Stablecoins' },
         { label: 'Factoring Discount Model', val: 'Quadratic Risk Scoring (FIP-06)' },
-        { label: 'Pool Yield Structure', val: 'Dynamic APY Allocation on L2' },
+        { label: 'Off-Ramp Channels', val: 'StraitsX Pools / Brankas Disburse' },
         { label: 'Security Layer', val: 'ReentrancyGuard / SafeERC20' }
       ]
     },

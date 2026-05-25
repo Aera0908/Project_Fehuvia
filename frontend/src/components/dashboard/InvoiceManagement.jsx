@@ -1,8 +1,22 @@
 import React from 'react';
 import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
-export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
+export function InvoiceManagement({ invoices, handleSettle, handleSchedule, handleReview, automationLevel }) {
   
+  const formatScheduledDate = (dueDate) => {
+    if (!dueDate) return '';
+    const dateParts = dueDate.split('-');
+    if (dateParts.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const mIdx = parseInt(dateParts[1], 10) - 1;
+      const day = parseInt(dateParts[2], 10);
+      if (mIdx >= 0 && mIdx < 12) {
+        return `${months[mIdx]} ${day}`;
+      }
+    }
+    return dueDate;
+  };
+
   const getActionBadge = (invoice) => {
     if (invoice.settled) {
       return (
@@ -17,7 +31,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
       return (
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-amber-950/20 text-[#fb923c] border-[#fb923c]/20">
           <Clock className="w-4 h-4" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Scheduled (Jun 2)</span>
+          <span className="text-xs font-semibold uppercase tracking-wider">Scheduled ({formatScheduledDate(invoice.dueDate)})</span>
         </div>
       );
     }
@@ -120,7 +134,23 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
               return (
                 <tr key={invoice.id} className="border-b border-[#1c1c1f] hover:bg-white/[0.02] transition-colors">
                   <td className="py-4 px-4 text-sm font-mono text-white/80">{invoice.id}</td>
-                  <td className="py-4 px-4 text-sm font-bold text-white">{invoice.supplier}</td>
+                  <td className="py-4 px-4">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold text-white leading-none">{invoice.supplier}</span>
+                        {invoice.hasFehuviaAccount ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 uppercase tracking-wider animate-pulse">
+                            Partner
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-white/5 text-white/40 border border-white/10 uppercase tracking-wider">
+                            Off-Ramp
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-white/30 font-mono mt-1 block truncate max-w-[160px]">{invoice.supplierWallet}</span>
+                    </div>
+                  </td>
                   <td className="py-4 px-4 text-sm font-extrabold text-white">${invoice.amount.toLocaleString()}</td>
                   <td className="py-4 px-4 text-sm text-[#a1a1a1]">{invoice.dueDate}</td>
                   <td className="py-4 px-4">{getActionBadge(invoice)}</td>
@@ -131,10 +161,47 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                         <span>Cleared T+0</span>
                       </span>
                     ) : invoice.scheduled ? (
-                      <span className="text-xs text-[#fb923c] font-bold uppercase tracking-widest flex items-center space-x-1.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Scheduled</span>
-                      </span>
+                      (() => {
+                        const todayStr = (() => {
+                          const d = new Date();
+                          const y = d.getFullYear();
+                          const m = String(d.getMonth() + 1).padStart(2, '0');
+                          const day = String(d.getDate()).padStart(2, '0');
+                          return `${y}-${m}-${day}`;
+                        })();
+                        const isPastOrToday = invoice.dueDate <= todayStr;
+                        if (isPastOrToday) {
+                          return (
+                            <button
+                              onClick={() => handleSettle(invoice.id)}
+                              className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                              style={{
+                                background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
+                                color: '#0a0a0a',
+                                boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)',
+                                textShadow: '0 1px 1px rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(212, 175, 55, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)';
+                              }}
+                            >
+                              Settle Now
+                            </button>
+                          );
+                        }
+                        return (
+                          <span className="text-xs text-[#fb923c] font-bold uppercase tracking-widest flex items-center space-x-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Scheduled</span>
+                          </span>
+                        );
+                      })()
                     ) : invoice.loading ? (
                       <button
                         disabled
@@ -148,7 +215,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                       </button>
                     ) : (
                       <div className="flex gap-2">
-                        {isSafe && (
+                        {(isSafe || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSettle(invoice.id)}
                             className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
@@ -171,7 +238,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                             Settle via Morph
                           </button>
                         )}
-                        {isDelay && (
+                        {(isDelay || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSchedule(invoice.id)}
                             className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-xs font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
@@ -179,9 +246,9 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                             Schedule
                           </button>
                         )}
-                        {isReview && (
+                        {(isReview && automationLevel !== 'manual') && (
                           <button
-                            onClick={() => handleSchedule(invoice.id)}
+                            onClick={() => handleReview(invoice.id)}
                             className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-xs font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
                           >
                             Review
@@ -222,7 +289,18 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Supplier</span>
-                  <span className="text-sm font-bold text-white">{invoice.supplier}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-bold text-white">{invoice.supplier}</span>
+                    {invoice.hasFehuviaAccount ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 uppercase tracking-wider animate-pulse">
+                        Partner
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold bg-white/5 text-white/40 border border-white/10 uppercase tracking-wider">
+                        Off-Ramp
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block font-light">Amount</span>
@@ -244,10 +322,39 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                       <span>Cleared</span>
                     </span>
                   ) : invoice.scheduled ? (
-                    <span className="text-xs text-[#fb923c] font-bold uppercase tracking-wider flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>Scheduled</span>
-                    </span>
+                    (() => {
+                      const todayStr = (() => {
+                        const d = new Date();
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${day}`;
+                      })();
+                      const isPastOrToday = invoice.dueDate <= todayStr;
+                      if (isPastOrToday) {
+                        return (
+                          <button
+                            onClick={() => handleSettle(invoice.id)}
+                            className="px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer w-full text-center"
+                            style={{
+                              background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
+                              color: '#0a0a0a',
+                              boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)',
+                              textShadow: '0 1px 1px rgba(255, 255, 255, 0.2)',
+                              border: '1px solid rgba(255, 255, 255, 0.15)'
+                            }}
+                          >
+                            Settle Now
+                          </button>
+                        );
+                      }
+                      return (
+                        <span className="text-xs text-[#fb923c] font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Scheduled</span>
+                        </span>
+                      );
+                    })()
                   ) : invoice.loading ? (
                     <button
                       disabled
@@ -259,40 +366,40 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule }) {
                       </svg>
                       <span>Settling...</span>
                     </button>
-                  ) : (
-                    <div className="flex gap-2 w-full justify-end">
-                      {isSafe && (
-                        <button
-                          onClick={() => handleSettle(invoice.id)}
-                          className="px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer w-full text-center"
-                          style={{
-                            background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
-                            color: '#0a0a0a',
-                            boxShadow: '0 2px 8px rgba(212, 175, 55, 0.35)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)'
-                          }}
-                        >
-                          Settle T+0
-                        </button>
-                      )}
-                      {isDelay && (
-                        <button
-                          onClick={() => handleSchedule(invoice.id)}
-                          className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
-                        >
-                          Schedule
-                        </button>
-                      )}
-                      {isReview && (
-                        <button
-                          onClick={() => handleSchedule(invoice.id)}
-                          className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
-                        >
-                          Review
-                        </button>
-                      )}
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex gap-2 w-full justify-end">
+                        {(isSafe || automationLevel === 'manual') && (
+                          <button
+                            onClick={() => handleSettle(invoice.id)}
+                            className="px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer w-full text-center"
+                            style={{
+                              background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
+                              color: '#0a0a0a',
+                              boxShadow: '0 2px 8px rgba(212, 175, 55, 0.35)',
+                              border: '1px solid rgba(255, 255, 255, 0.15)'
+                            }}
+                          >
+                            Settle T+0
+                          </button>
+                        )}
+                        {(isDelay || automationLevel === 'manual') && (
+                          <button
+                            onClick={() => handleSchedule(invoice.id)}
+                            className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                          >
+                            Schedule
+                          </button>
+                        )}
+                        {(isReview && automationLevel !== 'manual') && (
+                          <button
+                            onClick={() => handleReview(invoice.id)}
+                            className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                          >
+                            Review
+                          </button>
+                        )}
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
