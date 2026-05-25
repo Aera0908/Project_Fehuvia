@@ -5,3 +5,11 @@ sample-code/
 **/node_modules/
 **/dist/
 *.log
+
+# Sensitive environment configuration files
+.env
+**/.env
+**/.env.local
+**/.env.production
+**/.env.development
+
