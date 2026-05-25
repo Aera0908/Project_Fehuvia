@@ -13,3 +13,5 @@ sample-code/
 **/.env.production
 **/.env.development
 
+# Local planning and product deck outlines
+plans/
