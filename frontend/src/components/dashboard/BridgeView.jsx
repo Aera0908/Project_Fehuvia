@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeftRight, Landmark, ArrowRight, Wallet, ShieldCheck, Check, Info, Sparkles, TrendingUp, AlertTriangle, Phone, QrCode, Delete, ShieldAlert } from 'lucide-react';
 import { BankLogo } from '../BankLogo';
+import { ethers } from 'ethers';
+import { getFriendlyError, getErrorBadge } from '../../utils/errorMessages';
 
 export function BridgeView({ 
   userProfile, 
@@ -12,7 +14,7 @@ export function BridgeView({
   setToast, 
   setNotifications, 
   setWalletUSDCBalance, 
-  setDemoUSDCBalance,
+
   prefilledBridgeInvoice,
   setPrefilledBridgeInvoice,
   setCurrentPage,
@@ -192,7 +194,104 @@ export function BridgeView({
         const token = localStorage.getItem('fehuvia_token');
         if (!token) throw new Error('Authorization required.');
 
-        const res = await fetch('http://localhost:3001/api/bridge/convert', {
+        if (!window.ethereum) {
+          throw new Error('MetaMask or a valid EVM browser wallet is required to complete this actual on-chain transaction.');
+        }
+
+        setStatusText('Connecting to your browser wallet extension...');
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const userAddress = await signer.getAddress();
+
+        // Automatically sync wallet address if it doesn't match or is a demo address
+        if (!userProfile?.walletAddress || userProfile.walletAddress.startsWith('0xdemo') || userProfile.walletAddress.toLowerCase() !== userAddress.toLowerCase()) {
+          const token = localStorage.getItem('fehuvia_token');
+          if (token) {
+            try {
+              const apiRes = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001'}/api/auth/wallet`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ walletAddress: userAddress })
+              });
+              if (apiRes.ok) {
+                await fetchProfile();
+              }
+            } catch (err) {
+              console.warn("Failed to auto-update wallet address on backend during conversion:", err);
+            }
+          }
+        }
+
+        // Check/switch network to Morph Testnet (2910 / 0xb5e)
+        setStatusText('Verifying Morph L2 Testnet network connection...');
+        const network = await provider.getNetwork();
+        const chainId = Number(network.chainId);
+        if (chainId !== 2910 && chainId !== 2818) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0xb5e' }],
+            });
+          } catch (switchErr) {
+            if (switchErr.code === 4902 || switchErr.message?.toLowerCase().includes('unrecognized')) {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: '0xb5e',
+                  chainName: 'Morph Testnet',
+                  nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+                  rpcUrls: ['https://rpc-hoodi.morph.network'],
+                  blockExplorerUrls: ['https://explorer-testnet.morph.network']
+                }],
+              });
+            } else {
+              throw switchErr;
+            }
+          }
+        }
+
+        const USDC_ADDRESS = "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
+        const amountDecimals = ethers.parseUnits(usdVal.toFixed(2), 6);
+        let txHash = '0x';
+
+        if (direction === 'fiat_to_token') {
+          setStatusText(`Minting $${usdVal.toLocaleString()} USDC stablecoins directly into your wallet via MetaMask...`);
+          const abi = ["function mint(address to, uint256 amount) returns (bool)"];
+          const usdc = new ethers.Contract(USDC_ADDRESS, abi, signer);
+          const tx = await usdc.mint(userAddress, amountDecimals);
+          setStatusText('Waiting for Morph L2 Testnet block finality...');
+          const receipt = await tx.wait();
+          txHash = receipt.hash;
+        } else {
+          setStatusText('Prompting MetaMask to sign stablecoin off-ramp custody transfer...');
+          const abi = [
+            "function balanceOf(address account) view returns (uint256)",
+            "function mint(address to, uint256 amount) returns (bool)",
+            "function transfer(address to, uint256 amount) returns (bool)"
+          ];
+          const usdc = new ethers.Contract(USDC_ADDRESS, abi, signer);
+          
+          // Auto-faucet check: if user has no USDC, let's auto-mint some first using MetaMask!
+          const bal = await usdc.balanceOf(userAddress);
+          if (bal < amountDecimals) {
+            setStatusText('Zero mUSDC detected. Minting initial testnet USDC tokens first...');
+            const mintTx = await usdc.mint(userAddress, ethers.parseUnits("50000", 6));
+            await mintTx.wait();
+          }
+
+          setStatusText('Transferring USDC stablecoins to bridge off-ramp custody...');
+          const tx = await usdc.transfer("0x000000000000000000000000000000000000dEaD", amountDecimals);
+          setStatusText('Waiting for Morph L2 Testnet block finality...');
+          const receipt = await tx.wait();
+          txHash = receipt.hash;
+        }
+
+        setStatusText('Synchronizing on-chain finality with Fehuvia ledger databases...');
+
+        const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001'}/api/bridge/convert`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -201,7 +300,8 @@ export function BridgeView({
           body: JSON.stringify({
             direction,
             amountUSD: usdVal,
-            selectedBankId: selectedBankId
+            selectedBankId: selectedBankId,
+            txHash: txHash
           })
         });
 
@@ -214,7 +314,7 @@ export function BridgeView({
 
         setStep(4);
         setStatusText(direction === 'fiat_to_token' 
-          ? `Conversion successful! Aggregated ₱${phpVal.toLocaleString()} from ${targetBank.short} into $${usdVal.toLocaleString()} USDC.`
+          ? `Conversion successful! Converted ₱${phpVal.toLocaleString()} from ${targetBank.short} into $${usdVal.toLocaleString()} USDC.`
           : `Off-ramp successful! Converted $${usdVal.toLocaleString()} USDC to ₱${phpVal.toLocaleString()} in your ${targetBank.short} account.`
         );
 
@@ -224,11 +324,11 @@ export function BridgeView({
             title: direction === 'fiat_to_token' ? 'USDC Mint Completed' : 'Bank Cash Disbursed',
             message: direction === 'fiat_to_token' 
               ? `Successfully converted ₱${phpVal.toLocaleString()} via ${targetBank.short} to $${usdVal.toLocaleString()} USDC.`
-              : `Successfully converted $${usdVal.toLocaleString()} USDC to ₱${phpVal.toLocaleString()} via ${targetBank.short}.`,
+              : `Successfully Converted $${usdVal.toLocaleString()} USDC to ₱${phpVal.toLocaleString()} via ${targetBank.short}.`,
             time: 'Just now',
             read: false,
             type: 'success',
-            meta: `Rate: ₱${exchangeRate.toFixed(2)}`
+            meta: `Tx: ${txHash.substring(0, 10)}...`
           },
           ...prev
         ]);
@@ -238,19 +338,34 @@ export function BridgeView({
           message: direction === 'fiat_to_token' 
             ? `Successfully minted $${usdVal.toLocaleString()} USDC to wallet!`
             : `Successfully credited ₱${phpVal.toLocaleString()} operating balance!`,
-          txHash: 'Bridge Conversion Synced'
+          txHash: `${txHash.substring(0, 10)}...`
         });
 
-        setDemoUSDCBalance(prev => direction === 'fiat_to_token' ? prev + usdVal : Math.max(0, prev - usdVal));
-        setWalletUSDCBalance(prev => direction === 'fiat_to_token' ? prev + usdVal : Math.max(0, prev - usdVal));
+        if (userProfile && userProfile.walletAddress && userProfile.walletAddress.startsWith('0xdemo')) {
+          setWalletUSDCBalance(prev => direction === 'fiat_to_token' ? prev + usdVal : Math.max(0, prev - usdVal));
+        } else {
+          // Connected with real EVM wallet: query on-chain balance to match blockchain state
+          if (window.ethereum) {
+            const tempProvider = new ethers.BrowserProvider(window.ethereum);
+            const tempUsdc = new ethers.Contract(USDC_ADDRESS, ["function balanceOf(address account) view returns (uint256)"], tempProvider);
+            tempUsdc.balanceOf(userAddress).then(bal => {
+              const formattedBal = Number(ethers.formatUnits(bal, 6));
+              setWalletUSDCBalance(formattedBal);
+            }).catch(e => console.error("Balance refresh error:", e));
+          }
+        }
 
         fetchProfile();
-        fetchPayments();
 
       } catch (err) {
-        console.error(err);
+        console.error('Bridge conversion failed:', err);
         setStep(0);
-        setErrorText(err.message || 'Verification failed. Please try again.');
+        setErrorText(getFriendlyError(err, 'bridge'));
+        setToast({
+          show: true,
+          message: getFriendlyError(err, 'bridge'),
+          txHash: getErrorBadge('bridge')
+        });
       }
     }, 4500);
   };

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, ShieldAlert, Sparkles, Wallet, Sliders, ChevronRight, ChevronLeft, Check, CheckCircle2, X } from 'lucide-react';
 import { ethers } from 'ethers';
+import { getFriendlyError } from '../utils/errorMessages';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 export default function OnboardingWizard({ setView }) {
   const [step, setStep] = useState(1);
@@ -201,10 +202,7 @@ export default function OnboardingWizard({ setView }) {
           throw new Error('Backend returned malformed JSON during onboarding.');
         }
       } else {
-        throw new Error(
-          `Expected JSON from the onboarding API, but received ${contentType || 'an unknown response type'}. ` +
-          'Check that the backend is running on http://localhost:3001 and that /api/auth/onboarding is being handled by the API server.'
-        );
+        throw new Error('server_unavailable');
       }
 
       if (!res.ok) {
@@ -227,7 +225,7 @@ export default function OnboardingWizard({ setView }) {
       setView('dashboard');
     } catch (err) {
       console.error('Onboarding submission failed:', err);
-      setError(err.message || 'Failed to finalize setup. Please check connection.');
+      setError(getFriendlyError(err, 'general'));
     } finally {
       setLoading(false);
     }

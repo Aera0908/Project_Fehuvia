@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 export default function AuthModal({ modalType, setModalType, setView }) {
   const [email, setEmail] = useState('');
@@ -15,6 +15,14 @@ export default function AuthModal({ modalType, setModalType, setView }) {
   const [verificationCode, setVerificationCode] = useState('');
   const [tempUserData, setTempUserData] = useState(null);
 
+  // Dynamic password complexity calculations for signup criteria checker
+  const hasMinLen = password.length >= 8;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const isPasswordValid = hasMinLen && hasUpper && hasLower && hasNumber && hasSpecial;
+
   if (modalType === 'none') return null;
 
   const handleSubmit = async (e) => {
@@ -22,9 +30,15 @@ export default function AuthModal({ modalType, setModalType, setView }) {
     setError('');
 
     // Confirm password validation for signup
-    if (modalType === 'signup' && password !== confirmPassword) {
-      setError('Passwords do not match. Please re-enter.');
-      return;
+    if (modalType === 'signup') {
+      if (password !== confirmPassword) {
+        setError('Passwords do not match. Please re-enter.');
+        return;
+      }
+      if (!isPasswordValid) {
+        setError('Password does not meet complexity requirements. Please satisfy all requirements listed below.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -177,9 +191,40 @@ export default function AuthModal({ modalType, setModalType, setView }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={modalType === 'signup' ? 8 : 6}
                 />
               </div>
+
+              {/* Real-time Password Security Criteria Checker - Signup only */}
+              {modalType === 'signup' && (
+                <div className="mt-3.5 p-4 rounded-2xl border border-white/5 bg-black/40 space-y-2.5 animate-fadeIn">
+                  <span className="block text-[9px] font-bold uppercase tracking-widest text-[#e4c37a]/80 mb-1">
+                    Password Security Requirements
+                  </span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {[
+                      { label: 'Min 8 characters', met: hasMinLen },
+                      { label: '1 Uppercase (A-Z)', met: hasUpper },
+                      { label: '1 Lowercase (a-z)', met: hasLower },
+                      { label: '1 Number (0-9)', met: hasNumber },
+                      { label: '1 Special character', met: hasSpecial }
+                    ].map((req, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs transition-all duration-300">
+                        {req.met ? (
+                          <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-[fadeIn_0.2s_ease-out]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full bg-white/20 shrink-0" />
+                        )}
+                        <span className={`text-[10px] font-light ${req.met ? 'text-emerald-400 font-medium' : 'text-white/30'}`}>
+                          {req.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Confirm Password - Signup only */}
               {modalType === 'signup' && (
@@ -194,7 +239,7 @@ export default function AuthModal({ modalType, setModalType, setView }) {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
                 </div>
               )}

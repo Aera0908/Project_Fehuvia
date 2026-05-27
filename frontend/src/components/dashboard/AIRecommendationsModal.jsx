@@ -9,7 +9,7 @@ export default function AIRecommendationsModal({ isOpen, onClose }) {
   const [sortOrder, setSortOrder] = useState('desc'); // asc, desc
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const API_BASE = 'http://localhost:3001';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
   const sortingOptions = [
     { value: 'date-desc', label: 'Date (Newest First)' },

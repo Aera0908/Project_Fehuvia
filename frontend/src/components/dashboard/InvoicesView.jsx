@@ -30,7 +30,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
     const checkTimeout = setTimeout(async () => {
       try {
         const token = localStorage.getItem('fehuvia_token');
-        const API_BASE = 'http://localhost:3001';
+        const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
         
         const res = await fetch(`${API_BASE}/api/suppliers/check?name=${encodeURIComponent(newInvoice.supplier.trim())}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -128,12 +128,17 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
     const filenames = {
       morph: 'morph_logistics_invoice.pdf',
       cyber: 'cyber_security_audit_group.png',
-      elite: 'elite_office_materials_order.pdf'
+      elite: 'elite_office_materials_order.pdf',
+      apex: 'apex_telecom_invoice.pdf',
+      brankas: 'brankas_tech_api_invoice.pdf',
+      vertex: 'vertex_analytics_reporting_invoice.pdf',
+      aera: 'aera_properties_payout_invoice.pdf',
+      straitsx: 'straitsx_liquidity_invoice.pdf'
     };
 
     try {
       const token = localStorage.getItem('fehuvia_token');
-      const API_BASE = 'http://localhost:3001';
+      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
       
       const res = await fetch(`${API_BASE}/api/invoices/scan`, {
         method: 'POST',
@@ -190,7 +195,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
 
     try {
       const token = localStorage.getItem('fehuvia_token');
-      const API_BASE = 'http://localhost:3001';
+      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
       
       const res = await fetch(`${API_BASE}/api/invoices/scan`, {
         method: 'POST',
@@ -406,31 +411,31 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                     {/* Mock Invoice Tester row for rapid developer testing */}
                     <div>
                       <span className="block text-[9px] font-bold text-[#6a6a6a] uppercase tracking-wider mb-2.5 text-center">Or click a sandbox mock invoice to scan:</span>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleMockScan('morph')}
-                          className="p-2 bg-[#0c0c0e] hover:bg-[#161618] border border-white/5 rounded-xl text-left transition-colors cursor-pointer group"
-                        >
-                          <span className="text-[9px] font-bold text-white block group-hover:text-gold-metallic truncate">Morph Logistics</span>
-                          <span className="text-[8px] text-white/40 block mt-0.5">$4,500 USDC</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMockScan('cyber')}
-                          className="p-2 bg-[#0c0c0e] hover:bg-[#161618] border border-white/5 rounded-xl text-left transition-colors cursor-pointer group"
-                        >
-                          <span className="text-[9px] font-bold text-white block group-hover:text-gold-metallic truncate">Cyber Audit</span>
-                          <span className="text-[8px] text-white/40 block mt-0.5">$15,000 USDC</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMockScan('elite')}
-                          className="p-2 bg-[#0c0c0e] hover:bg-[#161618] border border-white/5 rounded-xl text-left transition-colors cursor-pointer group"
-                        >
-                          <span className="text-[9px] font-bold text-white block group-hover:text-gold-metallic truncate">Elite Office</span>
-                          <span className="text-[8px] text-white/40 block mt-0.5">$72,000 USDC</span>
-                        </button>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { id: 'morph', name: 'Morph Logistics', amount: '$4,500 USDC' },
+                          { id: 'cyber', name: 'Cyber Audit', amount: '$15,000 USDC' },
+                          { id: 'elite', name: 'Elite Office', amount: '$72,000 USDC' },
+                          { id: 'apex', name: 'Apex Telecom', amount: '$24,000 USDC' },
+                          { id: 'brankas', name: 'Brankas Tech', amount: '$38,000 USDC' },
+                          { id: 'vertex', name: 'Vertex Analytics', amount: '$12,500 USDC' },
+                          { id: 'aera', name: 'Aera Properties', amount: '$85,000 USDC' },
+                          { id: 'straitsx', name: 'StraitsX', amount: '$50,000 USDC' }
+                        ].map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => handleMockScan(m.id)}
+                            className="p-2 bg-[#0c0c0e] hover:bg-[#161618] border border-white/5 hover:border-gold-metallic/30 rounded-xl text-left transition-all cursor-pointer group hover:scale-[1.02] active:scale-95"
+                          >
+                            <span className="text-[9px] font-bold text-white block group-hover:text-gold-metallic truncate">
+                              {m.name}
+                            </span>
+                            <span className="text-[7.5px] text-white/40 block mt-0.5 font-mono">
+                              {m.amount}
+                            </span>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -690,7 +695,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                           {(isDelay || automationLevel === 'manual') && (
                             <button
                               onClick={() => handleSchedule(invoice.id)}
-                              className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#2a2a2d] hover:text-white border border-[#2C2C2C] text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-colors"
+                              className="px-4 py-2 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-all"
                             >
                               Schedule
                             </button>
@@ -698,7 +703,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                           {(isReview && automationLevel !== 'manual') && (
                             <button
                               onClick={() => handleReview(invoice.id)}
-                              className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#2a2a2d] hover:text-white border border-[#2C2C2C] text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-colors"
+                              className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 text-xs font-bold uppercase tracking-wider rounded cursor-pointer transition-all"
                             >
                               Review
                             </button>
@@ -833,7 +838,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                         {(isDelay || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSchedule(invoice.id)}
-                            className="px-3 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-3 py-1.5 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Schedule
                           </button>
@@ -841,7 +846,7 @@ export function InvoicesView({ invoices, handleSettle, handleSchedule, handleUpl
                         {(isReview && automationLevel !== 'manual') && (
                           <button
                             onClick={() => handleReview(invoice.id)}
-                            className="px-3 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Review
                           </button>

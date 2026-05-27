@@ -241,7 +241,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule, hand
                         {(isDelay || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSchedule(invoice.id)}
-                            className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-xs font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-4 py-2 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Schedule
                           </button>
@@ -249,7 +249,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule, hand
                         {(isReview && automationLevel !== 'manual') && (
                           <button
                             onClick={() => handleReview(invoice.id)}
-                            className="px-4 py-2 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-xs font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Review
                           </button>
@@ -385,7 +385,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule, hand
                         {(isDelay || automationLevel === 'manual') && (
                           <button
                             onClick={() => handleSchedule(invoice.id)}
-                            className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-3.5 py-1.5 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Schedule
                           </button>
@@ -393,7 +393,7 @@ export function InvoiceManagement({ invoices, handleSettle, handleSchedule, hand
                         {(isReview && automationLevel !== 'manual') && (
                           <button
                             onClick={() => handleReview(invoice.id)}
-                            className="px-3.5 py-1.5 bg-[#1c1c1e] text-[#a1a1a1] hover:bg-[#27272a] hover:text-white rounded-lg transition-colors text-[10px] font-bold uppercase tracking-wider border border-[#2C2C2C] cursor-pointer"
+                            className="px-3.5 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all"
                           >
                             Review
                           </button>

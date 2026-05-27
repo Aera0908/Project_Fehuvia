@@ -7,16 +7,17 @@ import { AICopilot } from './AICopilot';
 import { InvoiceManagement } from './InvoiceManagement';
 import { CashFlowView } from './CashFlowView';
 import { InvoicesView } from './InvoicesView';
-import { PaymentsView } from './PaymentsView';
 import { AnalyticsView } from './AnalyticsView';
 import { ProfileView } from './ProfileView';
 import { NotificationsView } from './NotificationsView';
 import { HelpView } from './HelpView';
 import { BridgeView } from './BridgeView';
+import { TransactionsView } from './TransactionsView';
 import DemoDisclaimer from '../DemoDisclaimer';
 import BrankasLinkModal from '../BrankasLinkModal';
 import { BankLogo } from '../BankLogo';
 import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck, Calendar, Layers, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getFriendlyError, getErrorBadge } from '../../utils/errorMessages';
 
 export default function DashboardLayout({ setView, handleLogout }) {
   // Client-side SPA routing helper to parse path and return page state
@@ -26,7 +27,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
     
     if (cleanPath === 'cash-flow') return 'Cash Flow';
     
-    const pages = ['dashboard', 'invoices', 'payments', 'treasury', 'bridge', 'analytics', 'profile', 'notifications', 'help'];
+    const pages = ['dashboard', 'invoices', 'transactions', 'treasury', 'bridge', 'analytics', 'profile', 'notifications', 'help'];
     const match = pages.find(p => p === cleanPath);
     if (match) {
       return match.charAt(0).toUpperCase() + match.slice(1);
@@ -82,7 +83,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
     }
   };
 
-  const API_BASE = 'http://localhost:3001';
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
   // Traditional bank balance (represented in Philippine Pesos)
   const [balance, setBalance] = useState(() => {
@@ -128,6 +129,12 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // B2B fiat-to-stablecoin dynamic conversion modal state
   const [conversionModal, setConversionModal] = useState({
+    isOpen: false,
+    invoice: null
+  });
+
+  // Direct on-chain USDC settlement confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     invoice: null
   });
@@ -317,18 +324,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
   const [bridgeInvoice, setBridgeInvoice] = useState(null);
   const [bridgeStep, setBridgeStep] = useState(0); // 0: idle, 1: debiting, 2: swapping, 3: minting, 4: complete
   const [bridgeStatus, setBridgeStatus] = useState('');
-  const [demoUSDCBalance, setDemoUSDCBalance] = useState(() => {
-    try {
-      const stored = localStorage.getItem('fehuvia_user');
-      if (stored) {
-        const u = JSON.parse(stored);
-        if (u.email === 'demo@fehuvia.com' || u.email === 'admin@fehuvia.com') {
-          return 42881.64;
-        }
-      }
-    } catch {}
-    return 0;
-  });
+
 
   // Dynamic Manual Review Checklist Modal State
   const [reviewModal, setReviewModal] = useState({ isOpen: false, invoice: null });
@@ -679,16 +675,19 @@ export default function DashboardLayout({ setView, handleLogout }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   // Fetch live on-chain stablecoin balance of connected MetaMask wallet
-  const fetchWalletUSDCBalance = async (addressOverride = null) => {
+  const fetchWalletUSDCBalance = async (addressOverride = null, retries = 3) => {
     const address = addressOverride || userProfile.walletAddress;
-    if (!window.ethereum || !address) {
+    if (!window.ethereum) {
+      if (retries > 0) {
+        setTimeout(() => fetchWalletUSDCBalance(addressOverride, retries - 1), 300);
+        return;
+      }
       setWalletUSDCBalance(0);
       return;
     }
 
-    if (address.startsWith('0xdemo') || !ethers.isAddress(address)) {
-      // Presentation demo account: bypass on-chain queries and load premium mock balance
-      setWalletUSDCBalance(demoUSDCBalance);
+    if (!address || !ethers.isAddress(address)) {
+      setWalletUSDCBalance(0);
       return;
     }
 
@@ -705,11 +704,127 @@ export default function DashboardLayout({ setView, handleLogout }) {
     }
   };
 
-  // Wire automatic wallet balance checking inside mount hook
+  // Wire automatic wallet balance checking and gas faucet drip inside mount hook
   useEffect(() => {
     if (userProfile.walletAddress) {
       fetchWalletUSDCBalance();
+      
+      const token = localStorage.getItem('fehuvia_token');
+      const address = userProfile.walletAddress;
+      
+      if (token && address && !address.startsWith('0xdemo') && ethers.isAddress(address)) {
+        fetch(`${API_BASE}/api/faucet/drip`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ walletAddress: address })
+        }).then(res => res.json()).then(data => {
+          if (data && data.dripped) {
+            setToast({
+              show: true,
+              message: `💧 Faucet Drip: Funded your wallet with 0.002 ETH gas!`,
+              txHash: `${data.txHash.substring(0, 10)}...`
+            });
+          }
+        }).catch(err => {
+          console.warn("Gas faucet drip warning:", err);
+        });
+      }
     }
+  }, [userProfile.walletAddress]);
+
+  // Real-time active account connection auto-detection on mount
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.request({ method: 'eth_accounts' })
+        .then(accounts => {
+          if (accounts && accounts.length > 0) {
+            const activeAddress = accounts[0];
+            if (userProfile.walletAddress !== activeAddress) {
+              console.log("🦊 Auto-detected active MetaMask account on mount:", activeAddress);
+              
+              const token = localStorage.getItem('fehuvia_token');
+              if (token) {
+                fetch(`${API_BASE}/api/auth/wallet`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ walletAddress: activeAddress })
+                }).catch(err => console.warn("Failed to auto-persist active wallet address on mount:", err));
+              }
+
+              setUserProfile(prev => {
+                const updated = { ...prev, walletAddress: activeAddress };
+                localStorage.setItem('fehuvia_user', JSON.stringify(updated));
+                return updated;
+              });
+
+              fetchWalletUSDCBalance(activeAddress);
+            }
+          }
+        })
+        .catch(err => console.warn("Error checking MetaMask accounts on mount:", err));
+    }
+  }, []);
+
+  // Web3 listeners for real-time account switching and chain changing
+  useEffect(() => {
+    if (!window.ethereum) return;
+
+    const handleAccountsChanged = (accounts) => {
+      if (accounts && accounts.length > 0) {
+        const activeAddress = accounts[0];
+        if (userProfile.walletAddress !== activeAddress) {
+          console.log("🦊 MetaMask accountsChanged event fired:", activeAddress);
+          
+          const token = localStorage.getItem('fehuvia_token');
+          if (token) {
+            fetch(`${API_BASE}/api/auth/wallet`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ walletAddress: activeAddress })
+            }).catch(err => console.warn("Failed to persist wallet address on accountsChanged:", err));
+          }
+
+          setUserProfile(prev => {
+            const updated = { ...prev, walletAddress: activeAddress };
+            localStorage.setItem('fehuvia_user', JSON.stringify(updated));
+            return updated;
+          });
+
+          fetchWalletUSDCBalance(activeAddress);
+          
+          setToast({
+            show: true,
+            message: `Switched wallet account to: ${activeAddress.substring(0, 6)}...${activeAddress.substring(38)}`,
+            txHash: 'Account Switched'
+          });
+        }
+      } else {
+        handleDisconnectWallet();
+      }
+    };
+
+    const handleChainChanged = () => {
+      window.location.reload();
+    };
+
+    window.ethereum.on('accountsChanged', handleAccountsChanged);
+    window.ethereum.on('chainChanged', handleChainChanged);
+
+    return () => {
+      if (window.ethereum.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      }
+    };
   }, [userProfile.walletAddress]);
 
   // Handle MetaMask/EVM Wallet Connection
@@ -835,6 +950,28 @@ export default function DashboardLayout({ setView, handleLogout }) {
       fetchWalletUSDCBalance(address);
       setIsWalletModalOpen(false); // Close selection modal on success
 
+      // Trigger backend gas dispenser faucet to drip gas to this address if it lacks gas!
+      if (token) {
+        fetch(`${API_BASE}/api/faucet/drip`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ walletAddress: address })
+        }).then(res => res.json()).then(data => {
+          if (data && data.dripped) {
+            setToast({
+              show: true,
+              message: `💧 Faucet Drip: Received 0.002 ETH testnet gas!`,
+              txHash: `${data.txHash.substring(0, 10)}...`
+            });
+          }
+        }).catch(err => {
+          console.warn("Gas faucet drip warning:", err);
+        });
+      }
+
       setToast({
         show: true,
         message: `Wallet connected: ${address.substring(0, 6)}...${address.substring(38)}`,
@@ -844,8 +981,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       console.error('Wallet connection failed:', err);
       setToast({
         show: true,
-        message: 'Connection failed. Please authorize the request in your wallet.',
-        txHash: 'Wallet Block'
+        message: getFriendlyError(err, 'wallet'),
+        txHash: getErrorBadge('wallet')
       });
     }
   };
@@ -910,11 +1047,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
         txHash: 'API Connected'
       });
     } catch (err) {
-      console.error(err);
+      console.error('Bank link failed:', err);
       setToast({
         show: true,
-        message: 'Failed to establish bank connection. Please try again.',
-        txHash: 'API Error'
+        message: getFriendlyError(err, 'bank'),
+        txHash: getErrorBadge('bank')
       });
     }
   };
@@ -960,11 +1097,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
         txHash: 'API Unlinked'
       });
     } catch (err) {
-      console.error(err);
+      console.error('Bank unlink failed:', err);
       setToast({
         show: true,
-        message: 'Failed to unlink bank account. Please try again.',
-        txHash: 'API Error'
+        message: 'Bank account was not disconnected. Please check your connection and try again.',
+        txHash: getErrorBadge('bank')
       });
     }
   };
@@ -981,9 +1118,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       });
 
       if (res.ok) {
-        // Reset local presentation states to standard seeded standards
-        setDemoUSDCBalance(42881.64);
-        setWalletUSDCBalance(42881.64);
+        // Refresh on-chain wallet balance after reset
+        fetchWalletUSDCBalance();
         
         // Refresh profile state and invoice ledgers
         await fetchProfile();
@@ -998,11 +1134,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
         throw new Error('Failed to reset presentation database state.');
       }
     } catch (err) {
-      console.error(err);
+      console.error('Demo reset failed:', err);
       setToast({
         show: true,
-        message: '⚠️ Failed to reset presentation database state.',
-        txHash: 'Error'
+        message: 'Could not restore demo state. Please check your connection and try again.',
+        txHash: 'Reset Failed'
       });
     }
   };
@@ -1046,11 +1182,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
         txHash: 'API Off'
       });
     } catch (err) {
-      console.error(err);
+      console.error('Bank disconnect failed:', err);
       setToast({
         show: true,
-        message: 'Failed to disconnect bank account.',
-        txHash: 'API Error'
+        message: 'Could not remove bank linkage. Please check your connection and try again.',
+        txHash: getErrorBadge('bank')
       });
     }
   };
@@ -1060,7 +1196,15 @@ export default function DashboardLayout({ setView, handleLogout }) {
     const targetInvoice = invoices.find(inv => inv.id === id);
     if (!targetInvoice) return;
 
-    if (bankLinked) {
+    // Check if the user's active walletUSDCBalance is sufficient for direct settlement
+    const hasEnoughUSDC = walletUSDCBalance >= parseFloat(targetInvoice.amount);
+
+    if (hasEnoughUSDC) {
+      setConfirmModal({
+        isOpen: true,
+        invoice: targetInvoice
+      });
+    } else if (bankLinked) {
       setConversionModal({
         isOpen: true,
         invoice: targetInvoice
@@ -1092,8 +1236,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
       const debitedPHP = bridgeInvoice.amount * exchangeRate;
       setBalance(prev => Math.max(0, prev - debitedPHP));
       
-      // Credit USDC stablecoins to demo wallet balance!
-      setDemoUSDCBalance(prev => prev + bridgeInvoice.amount);
+      // Credit USDC stablecoins to wallet balance
       setWalletUSDCBalance(prev => prev + bridgeInvoice.amount);
       
       setToast({
@@ -1170,7 +1313,6 @@ export default function DashboardLayout({ setView, handleLogout }) {
       }));
 
       // Deduct USDC balance for the buyer
-      setDemoUSDCBalance(prev => Math.max(0, prev - offRampInvoice.amount));
       setWalletUSDCBalance(prev => Math.max(0, prev - offRampInvoice.amount));
 
       // Sync workstation states
@@ -1179,11 +1321,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
       fetchPredictions();
       fetchPayments();
     } catch (err) {
-      console.error(err);
+      console.error('Off-ramp settlement sync error:', err);
       setToast({
         show: true,
-        message: 'Off-ramp payment cleared, but database failed to update.',
-        txHash: 'Sync Error'
+        message: 'Off-ramp was processed on-chain, but the ledger could not sync. Refresh to verify status.',
+        txHash: 'Ledger Sync'
       });
       setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
     }
@@ -1223,62 +1365,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
         return;
       }
 
-      // Presentation demo account: bypass MetaMask and execute direct instant database sync
-      try {
-        const token = localStorage.getItem('fehuvia_token');
-        const mockTx = '0xmockdemo605a9ee6284739200fdc55ef21e' + Math.floor(Math.random() * 100);
-        
-        const res = await fetch(`${API_BASE}/api/invoices/${id}/settle`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ txHash: mockTx })
-        });
-
-        if (!res.ok) throw new Error('Demo settlement sync failed');
-
-        setInvoices(prev => prev.map(inv => {
-          if (inv.id === id) {
-            setToast({
-              show: true,
-              message: `Demo Settlement successful: cleared $${inv.amount.toLocaleString()} USDC via GCash!`,
-              txHash: `${mockTx.substring(0, 10)}...`
-            });
-
-            setNotifications(prevNotif => [
-              {
-                id: `notif-${Date.now()}`,
-                title: 'Demo Transaction Cleared',
-                message: `Demo invoice ${inv.id} cleared instantly via GCash/USDC conversion.`,
-                time: 'Just now',
-                read: false,
-                type: 'success',
-                meta: `Tx: ${mockTx.substring(0, 10)}...`
-              },
-              ...prevNotif
-            ]);
-
-            return { ...inv, loading: false, settled: true, txHash: mockTx };
-          }
-          return inv;
-        }));
-
-        // Deduct stablecoins locally from demo balance
-        setDemoUSDCBalance(prev => Math.max(0, prev - targetInvoice.amount));
-        setWalletUSDCBalance(prev => Math.max(0, prev - targetInvoice.amount));
-
-        // Sync workstation states with backend
-        fetchProfile();
-        fetchInvoices();
-        fetchPredictions();
-        fetchPayments();
-      } catch (err) {
-        console.error(err);
-        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, loading: false } : inv));
-      }
-      return; // Stop right here, bypass MetaMask
+      // Both Demo and Production accounts fall through to trigger actual MetaMask transactions on Morph L2 Testnet!
     }
 
     const token = localStorage.getItem('fehuvia_token');
@@ -1302,6 +1389,30 @@ export default function DashboardLayout({ setView, handleLogout }) {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
+
+      // Automatically sync wallet address if it doesn't match or is a demo address
+      if (!userProfile.walletAddress || userProfile.walletAddress.startsWith('0xdemo') || userProfile.walletAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        const token = localStorage.getItem('fehuvia_token');
+        if (token) {
+          try {
+            await fetch(`${API_BASE}/api/auth/wallet`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ walletAddress: userAddress })
+            });
+          } catch (err) {
+            console.warn("Failed to auto-update wallet address on backend during settlement:", err);
+          }
+        }
+        setUserProfile(prev => {
+          const updated = { ...prev, walletAddress: userAddress };
+          localStorage.setItem('fehuvia_user', JSON.stringify(updated));
+          return updated;
+        });
+      }
 
       // Deployed contract addresses in our sandbox
       const USDC_ADDRESS = import.meta.env.VITE_USDC_CONTRACT_ADDRESS || "0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660";
@@ -1354,7 +1465,23 @@ export default function DashboardLayout({ setView, handleLogout }) {
         txHash: 'Signing Invoice'
       });
 
-      const supplierWallet = targetInvoice.supplierWallet || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+      // Fetch the latest live wallet address of the supplier from the database right before signing to avoid stale client-side caches
+      let supplierWallet = targetInvoice.supplierWallet || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+      try {
+        const checkRes = await fetch(`${API_BASE}/api/suppliers/check?name=${encodeURIComponent(targetInvoice.supplier)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.exists && checkData.walletAddress) {
+            supplierWallet = checkData.walletAddress;
+            console.log(`🎯 Dynamically resolved latest live supplier wallet address from database: ${supplierWallet}`);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to dynamically check latest supplier wallet address from backend:", err);
+      }
+
       const settleTx = await settlement.settleInvoice(targetInvoice.id, supplierWallet, amountDecimals);
       const receipt = await settleTx.wait();
       const txHash = receipt.hash;
@@ -1417,8 +1544,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       
       setToast({
         show: true,
-        message: `Settlement failed: ${err.reason || err.message || 'Please check your connection.'}`,
-        txHash: 'Error'
+        message: getFriendlyError(err, 'settlement'),
+        txHash: getErrorBadge('settlement')
       });
     }
   };
@@ -1512,8 +1639,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       console.error('Error postponing invoice:', err);
       setToast({
         show: true,
-        message: 'Could not postpone invoice. Check connection.',
-        txHash: 'Scheduling Error'
+        message: getFriendlyError(err, 'schedule'),
+        txHash: getErrorBadge('schedule')
       });
     }
   };
@@ -1742,8 +1869,8 @@ export default function DashboardLayout({ setView, handleLogout }) {
       console.error('Error uploading invoice:', err);
       setToast({
         show: true,
-        message: `Failed to upload invoice: ${err.message || 'Please check your connection.'}`,
-        txHash: 'Error'
+        message: getFriendlyError(err, 'upload'),
+        txHash: getErrorBadge('upload')
       });
     }
   };
@@ -1779,28 +1906,47 @@ export default function DashboardLayout({ setView, handleLogout }) {
         }}>
         
         {/* Dynamic Translucent Morph Toast alert */}
-        {toast.show && (
-          <div className="fixed bottom-6 right-6 z-50 p-4 w-96 rounded-xl border border-emerald-500/35 bg-[#0d0d0f]/90 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-[fadeIn_0.3s_ease-out] flex gap-3.5 items-start">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-              <Check className="w-4 h-4 text-emerald-400" />
+        {toast.show && (() => {
+          const isError = toast.type === 'error' || 
+                          toast.txHash?.toLowerCase().includes('failed') || 
+                          toast.txHash?.toLowerCase().includes('error') || 
+                          toast.message?.toLowerCase().includes('could not') ||
+                          toast.message?.toLowerCase().includes('fail') ||
+                          toast.message?.toLowerCase().includes('reject');
+          
+          const title = toast.title || (isError ? 'Transaction Failed' : 'Morph Transaction Cleared');
+          const borderClass = isError ? 'border-red-500/35' : 'border-emerald-500/35';
+          const iconBgClass = isError ? 'bg-red-500/10 border border-red-500/30' : 'bg-emerald-500/10 border border-emerald-500/30';
+          const iconColorClass = isError ? 'text-red-400' : 'text-emerald-400';
+          const badgeClass = isError ? 'text-red-400 bg-red-950/20 border border-red-500/20' : 'text-emerald-400 bg-emerald-950/20 border border-emerald-500/20';
+
+          return (
+            <div className={`fixed bottom-6 right-6 z-50 p-4 w-96 rounded-xl border ${borderClass} bg-[#0d0d0f]/90 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-[fadeIn_0.3s_ease-out] flex gap-3.5 items-start`}>
+              <div className={`h-8 w-8 shrink-0 rounded-full ${iconBgClass} flex items-center justify-center`}>
+                {isError ? (
+                  <X className={`w-4 h-4 ${iconColorClass}`} />
+                ) : (
+                  <Check className={`w-4 h-4 ${iconColorClass}`} />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-white uppercase tracking-wider">{title}</p>
+                <p className="text-xs text-white/70 mt-1 leading-relaxed">{toast.message}</p>
+                {toast.txHash && (
+                  <p className={`text-[9px] font-mono ${badgeClass} mt-2 rounded px-1.5 py-0.5 inline-block`}>
+                    Tx: {toast.txHash}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setToast({ show: false, message: '', txHash: '' })}
+                className="text-white/40 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div className="flex-1">
-              <p className="text-xs font-bold text-white uppercase tracking-wider">Morph Transaction Cleared</p>
-              <p className="text-xs text-white/70 mt-1 leading-relaxed">{toast.message}</p>
-              {toast.txHash && (
-                <p className="text-[9px] font-mono text-emerald-400 mt-2 bg-emerald-950/20 border border-emerald-500/20 rounded px-1.5 py-0.5 inline-block">
-                  Tx: {toast.txHash}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setToast({ show: false, message: '', txHash: '' })}
-              className="text-white/40 hover:text-white transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+          );
+        })()}
 
         {/* WORKSTATION BLURRED WRAPPER CONTAINER */}
         <div className={`transition-all duration-700 flex flex-col min-h-full ${!userProfile.walletAddress ? 'blur-md pointer-events-none select-none' : ''}`}>
@@ -1870,24 +2016,26 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 </div>
               </div>
 
-              {/* On-Chain USDC Balance (only shown if connected) */}
-              {userProfile.walletAddress && (
-                <>
-                  <div className={`w-px bg-[#2C2C2C] hidden sm:block transition-all duration-300 ${isHeaderScrolled ? 'h-5' : 'h-10'}`}></div>
-                  <div className="cursor-pointer" onClick={() => setCurrentPage('Profile')}>
-                    <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
-                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider whitespace-nowrap">On-Chain USDC</span>
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <span className={`text-[9px] font-bold text-emerald-400 uppercase tracking-wider hidden sm:inline transition-all duration-300 ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>USDC</span>
-                      <span className={`font-black text-emerald-400 leading-tight transition-all duration-300 ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl font-mono'}`}>
-                        ${walletUSDCBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
+              {/* On-Chain USDC Balance */}
+              <div className={`w-px bg-[#2C2C2C] hidden sm:block transition-all duration-300 ${isHeaderScrolled ? 'h-5' : 'h-10'}`}></div>
+              <div className="cursor-pointer" onClick={() => setCurrentPage('Profile')}>
+                <div className={`flex items-center gap-1.5 overflow-hidden transition-all duration-300 ${isHeaderScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-6 opacity-100 mb-1'}`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${userProfile.walletAddress ? 'text-emerald-400' : 'text-white/30'}`}>
+                    {userProfile.walletAddress ? 'On-Chain USDC' : 'USDC Disconnected'}
+                  </span>
+                  {userProfile.walletAddress && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className={`text-[9px] font-bold uppercase tracking-wider hidden sm:inline transition-all duration-300 ${userProfile.walletAddress ? 'text-emerald-400' : 'text-white/30'} ${isHeaderScrolled ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden'}`}>
+                    USDC
+                  </span>
+                  <span className={`font-black leading-tight transition-all duration-300 ${userProfile.walletAddress ? 'text-emerald-400 font-mono' : 'text-white/20'} ${isHeaderScrolled ? 'text-sm' : 'text-lg sm:text-2xl'}`}>
+                    {userProfile.walletAddress ? `$${walletUSDCBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$ --.--'}
+                  </span>
+                </div>
+              </div>
 
               {/* Inline metrics — fade in when collapsed */}
               <div className={`items-center gap-5 transition-all duration-300 hidden lg:flex ${isHeaderScrolled ? 'opacity-100 max-w-xs' : 'opacity-0 max-w-0 overflow-hidden'}`}>
@@ -2152,8 +2300,19 @@ export default function DashboardLayout({ setView, handleLogout }) {
           {currentPage === 'Dashboard' && (
             <>
               {/* Section Header */}
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xs text-[#6a6a6a] uppercase tracking-[0.2em] font-bold">Financial Overview</h2>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <h2 className="text-xs text-[#6a6a6a] uppercase tracking-[0.2em] font-bold">Financial Overview</h2>
+                  
+                  <button
+                    onClick={() => setCurrentPage('Transactions')}
+                    className="px-3.5 py-1.5 rounded-lg border border-[#2C2C2C]/80 bg-[#101012] hover:bg-[#161618] hover:border-[#D4AF37]/30 text-[#a1a1a1] hover:text-white font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-lg"
+                    style={{ textShadow: '0 1px 1px rgba(0, 0, 0, 0.4)' }}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-gold-metallic animate-spin" style={{ animationDuration: '4s' }} />
+                    <span>View Transaction History Ledger</span>
+                  </button>
+                </div>
                 
                 {/* Filter Tabs */}
                 <div className="flex items-center gap-1.5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-lg p-1">
@@ -2190,14 +2349,28 @@ export default function DashboardLayout({ setView, handleLogout }) {
               </div>
 
               {/* Payables Ledger Table Panel */}
-              <div id="coach-payables-ledger">
+              <div id="coach-payables-ledger" className="space-y-4">
                 <InvoiceManagement
-                  invoices={invoices}
+                  invoices={[
+                    ...invoices.filter(inv => inv.status !== 'settled'),
+                    ...invoices.filter(inv => inv.status === 'settled')
+                  ].slice(0, 5)}
                   handleSettle={handleSettle}
                   handleSchedule={handleSchedule}
                   handleReview={handleReview}
                   automationLevel={userProfile.automationLevel}
                 />
+                
+                {/* See All Invoices Navigation Button */}
+                <div className="flex justify-end pr-2">
+                  <button
+                    onClick={() => setCurrentPage('Invoices')}
+                    className="px-5 py-2.5 rounded-lg border border-[#2C2C2C] bg-[#0c0c0e]/60 hover:bg-[#161618] hover:border-[#D4AF37]/30 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                  >
+                    <span>See All Invoices</span>
+                    <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -2221,9 +2394,10 @@ export default function DashboardLayout({ setView, handleLogout }) {
             </div>
           )}
 
-          {currentPage === 'Payments' && (
-            <div id="coach-payments-view" className="animate-fadeIn">
-              <PaymentsView payments={payments} />
+
+          {currentPage === 'Transactions' && (
+            <div id="coach-transactions-view" className="animate-fadeIn">
+              <TransactionsView API_BASE={API_BASE} setToast={setToast} />
             </div>
           )}
 
@@ -2352,6 +2526,50 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   })()}
                 </div>
               </div>
+
+              {/* Web3 Settlement Key Connection Plate */}
+              <div className="plate-black-metallic shape-asymmetric-1 p-6 border border-[#2C2C2C] mt-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-8 h-8 rounded bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">Morph Settlement Wallet</h3>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`h-2 w-2 rounded-full ${userProfile.walletAddress ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`}></span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${userProfile.walletAddress ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                        {userProfile.walletAddress ? 'Morph Testnet Connected' : 'Morph Testnet Disconnected'}
+                      </span>
+                    </div>
+                    <p className={`text-xs sm:text-sm font-mono select-all break-all leading-relaxed ${userProfile.walletAddress ? 'text-white/80' : 'text-white/40'}`}>
+                      {userProfile.walletAddress ? userProfile.walletAddress : 'No EVM settlement wallet connected.'}
+                    </p>
+                    {userProfile.walletAddress ? (
+                      <div className="flex items-center gap-4 mt-2">
+                        <span className="text-xs text-white/40">Network: <strong className="text-white/60">Morph L2</strong></span>
+                        <span className="text-xs text-white/40">Gas Token: <strong className="text-white/60">ETH</strong></span>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-white/30 mt-1">Please connect your MetaMask wallet to execute settlements on-chain.</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={userProfile.walletAddress ? handleDisconnectWallet : () => setIsWalletModalOpen(true)}
+                    className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                      userProfile.walletAddress
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
+                        : 'bg-gold-metallic text-black hover:scale-[1.01]'
+                    }`}
+                  >
+                    {userProfile.walletAddress ? 'Disconnect Wallet' : 'Connect Wallet'}
+                  </button>
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -2367,7 +2585,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 setToast={setToast}
                 setNotifications={setNotifications}
                 setWalletUSDCBalance={setWalletUSDCBalance}
-                setDemoUSDCBalance={setDemoUSDCBalance}
+
                 prefilledBridgeInvoice={prefilledBridgeInvoice}
                 setPrefilledBridgeInvoice={setPrefilledBridgeInvoice}
                 setCurrentPage={setCurrentPage}
@@ -2390,16 +2608,6 @@ export default function DashboardLayout({ setView, handleLogout }) {
             <div id="coach-profile-view" className="animate-fadeIn">
               <ProfileView 
                 userProfile={userProfile} 
-                handleConnectWallet={() => setIsWalletModalOpen(true)}
-                handleDisconnectWallet={handleDisconnectWallet}
-                bankLinked={bankLinked}
-                bankName={bankName}
-                bankBalance={balance}
-                onOpenBankLink={() => {
-                  setSelectedBankToLink({ id: 'bdo', name: 'Banco de Oro (BDO)', short: 'BDO', balance: 4500000.00, type: 'bank', isLinked: false });
-                  setIsBankModalOpen(true);
-                }}
-                onDisconnectBank={handleDisconnectBank}
                 handleUpdateAutomationLevel={handleUpdateAutomationLevel}
                 onResetDemo={handleResetDemoState}
               />
@@ -2999,6 +3207,98 @@ export default function DashboardLayout({ setView, handleLogout }) {
               
               <button
                 onClick={() => setConversionModal({ isOpen: false, invoice: null })}
+                className="w-full text-center text-xs text-white/40 hover:text-white transition-colors cursor-pointer py-2 block"
+              >
+                Cancel Settlement
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Direct On-Chain Settlement Confirmation Modal */}
+      {confirmModal.isOpen && confirmModal.invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] font-outfit">
+          <div className="glass-panel-gold rounded-3xl w-full max-w-md p-8 shadow-[0_24px_80px_rgba(0,0,0,0.95)] relative border border-[#D4AF37]/20 text-white">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setConfirmModal({ isOpen: false, invoice: null })}
+              className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <ShieldCheck className="w-10 h-10 text-gold-metallic mx-auto mb-3 animate-pulse" />
+              <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
+                Direct Settlement Authorization
+              </h2>
+              <p className="text-white/40 text-xs font-light mt-1">
+                Verify the on-chain invoice details before signing the settlement payload with your EVM key.
+              </p>
+            </div>
+
+            {/* Invoice Details */}
+            <div className="space-y-4 mb-6">
+              {/* Box 1: Supplier & Reference */}
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">B2B Supplier Counterparty</span>
+                  <span className="text-xs font-bold text-white block mt-1 truncate max-w-[200px]">
+                    {confirmModal.invoice.supplier}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Invoice ID</span>
+                  <span className="text-xs font-bold text-gold-metallic block mt-1">
+                    {confirmModal.invoice.id}
+                  </span>
+                </div>
+              </div>
+
+              {/* Box 2: On-Chain Wallet Balance sufficient */}
+              <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Settlement Asset</span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    Morph Testnet USDC
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Direct Charge</span>
+                  <span className="text-xs font-extrabold text-emerald-400 block mt-1">
+                    -${parseFloat(confirmModal.invoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                  </span>
+                </div>
+              </div>
+
+              {/* Verification Badge */}
+              <div className="p-4 rounded-xl border border-[#D4AF37]/15 bg-[#D4AF37]/5 text-left">
+                <p className="text-[10px] text-[#e4c37a] leading-relaxed font-light">
+                  🛡️ <strong>Treasury Verification:</strong> Your active Morph L2 wallet balance is fully sufficient for direct settlement. No cash conversion path is required.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const invId = confirmModal.invoice.id;
+                  setConfirmModal({ isOpen: false, invoice: null });
+                  executeSettlement(invId);
+                }}
+                className="w-full bg-gold-metallic hover:box-gold-glow text-black font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all duration-300 shadow-xl cursor-pointer"
+              >
+                Authorize & Settle Direct
+              </button>
+              
+              <button
+                onClick={() => setConfirmModal({ isOpen: false, invoice: null })}
                 className="w-full text-center text-xs text-white/40 hover:text-white transition-colors cursor-pointer py-2 block"
               >
                 Cancel Settlement

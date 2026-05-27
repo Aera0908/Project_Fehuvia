@@ -1,0 +1,53 @@
+# ====================================================================
+# FEHUVIA WORKSTATION - RENDER BLUEPRINT SPECIFICATION
+# ====================================================================
+# Connect your GitHub repository directly to Render and apply this 
+# blueprint to automatically deploy the database and Express backend.
+
+databases:
+  - name: fehuvia-db
+    plan: free
+    databaseName: fehuvia
+    user: fehuvia_admin
+    ipAllowList: [] # Allows all connections (required for standard Render internal mappings)
+
+services:
+  - type: web
+    name: fehuvia-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fehuvia-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MORPH_TESTNET_RPC
+        value: https://rpc-hoodi.morph.network
+      - key: USDC_CONTRACT_ADDRESS
+        value: 0xD8FCA101505D9F698485B22dCC79dF2Ec7a24660
+      - key: SETTLEMENT_CONTRACT_ADDRESS
+        value: 0xFc2Cc77640Ba5dEccD22BA0045a698b504871d95
+      
+      # ==================================================================
+      # CRITICAL ENTERPRISE KEYS (Set manually in Render Dashboard)
+      # ==================================================================
+      - key: OPENAI_API_KEY
+        sync: false
+        description: "Your OpenAI API Key to power the AI predictions co-pilot runway telemetry"
+      
+      - key: PRIVATE_KEY
+        sync: false
+        description: "Your EVM private key funded with testnet Morph ETH to serve as the background Gas Dispenser Vault"
+      
+      # ==================================================================
+      # ENVIRONMENT CONTROL (Change to your live Vercel domains)
+      # ==================================================================
+      - key: FRONTEND_URL
+        value: https://fehuvia.app

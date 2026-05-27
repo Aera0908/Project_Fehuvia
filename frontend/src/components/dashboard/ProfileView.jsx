@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import { User, Wallet, Shield, Key, Sliders, CheckCircle2, Copy, ToggleLeft, ToggleRight, Sparkles, Landmark } from 'lucide-react';
+import { User, Shield, Key, Sliders, CheckCircle2, Copy, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
 
 export function ProfileView({ 
   userProfile = {}, 
-  handleConnectWallet, 
-  handleDisconnectWallet,
-  bankLinked = false,
-  bankName = '',
-  bankBalance = 0,
-  onOpenBankLink,
-  onDisconnectBank,
-  handleUpdateAutomationLevel
+  handleUpdateAutomationLevel,
+  onResetDemo
 }) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [riskTolerance, setRiskTolerance] = useState(65); // percentage slider
@@ -52,100 +46,8 @@ export function ProfileView({
       {/* Main Settings Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Side: General Profile + Wallet connection (Col span 2) */}
+        {/* Left Side: General Profile + Web3 settings (Col span 2) */}
         <div className="lg:col-span-2 space-y-6">
-
-          {/* SECTION A: Philippine Bank Connection Plate */}
-          <div className="plate-black-metallic shape-asymmetric-3 p-6 border border-[#2C2C2C]">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic">
-                <Landmark className="w-4 h-4" />
-              </div>
-              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">Philippine Banking Connection</h3>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`h-2 w-2 rounded-full ${bankLinked ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`}></span>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${bankLinked ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {bankLinked ? `Brankas Active: ${bankName}` : 'No Traditional Bank Linked'}
-                  </span>
-                </div>
-                
-                {bankLinked ? (
-                  <div>
-                    <p className="text-lg font-bold text-white leading-none">
-                      ₱{bankBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP
-                    </p>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className="text-xs text-white/40">Open Finance Channel: <strong className="text-white/60">Brankas Secure API</strong></span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs text-white/40 leading-relaxed">
-                      Link your BDO, BPI, or UnionBank corporate account to power traditional cash flow forecasts.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={bankLinked ? onDisconnectBank : onOpenBankLink}
-                className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  bankLinked
-                    ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
-                    : 'bg-gold-metallic text-black hover:scale-[1.01]'
-                }`}
-              >
-                {bankLinked ? 'Disconnect Bank' : 'Link Bank Account'}
-              </button>
-            </div>
-          </div>
-          
-          {/* Section 1: Connected Wallet Plate */}
-          <div className="plate-black-metallic shape-asymmetric-1 p-6 border border-[#2C2C2C]">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-gold-metallic">
-                <Wallet className="w-4 h-4" />
-              </div>
-              <h3 className="font-cormorant text-2xl font-light tracking-wide text-white">Morph Settlement Wallet</h3>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-[#0a0a0c] border border-[#2C2C2C] rounded-2xl">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}`}></span>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {isConnected ? 'Morph Testnet Connected' : 'Morph Testnet Disconnected'}
-                  </span>
-                </div>
-                <p className={`text-xs sm:text-sm font-mono select-all break-all leading-relaxed ${isConnected ? 'text-white/80' : 'text-white/40'}`}>
-                  {isConnected ? walletAddress : 'No EVM settlement wallet connected.'}
-                </p>
-                {isConnected ? (
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className="text-xs text-white/40">Network: <strong className="text-white/60">Morph L2</strong></span>
-                    <span className="text-xs text-white/40">Gas Token: <strong className="text-white/60">ETH</strong></span>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-white/30 mt-1">Please connect your MetaMask wallet to execute settlements on-chain.</p>
-                )}
-              </div>
-
-              <button
-                onClick={isConnected ? handleDisconnectWallet : handleConnectWallet}
-                className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  isConnected
-                    ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20'
-                    : 'bg-gold-metallic text-black hover:scale-[1.01]'
-                }`}
-              >
-                {isConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
-              </button>
-            </div>
-          </div>
 
           {/* Section 2: General Admin profile settings form */}
           <div className="plate-black-metallic shape-asymmetric-3 p-6 border border-[#2C2C2C]">

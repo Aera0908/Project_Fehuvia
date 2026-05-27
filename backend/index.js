@@ -3,13 +3,36 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { OpenAI } = require('openai');
+const ethers = require('ethers');
 const db = require('./db');
 const { startListener } = require('./listener');
 const { signToken, authenticateJWT } = require('./auth');
 
+
 const app = express();
-app.use(cors());
+
+// Environment-aware CORS: restrict to the configured frontend domain in production,
+// allow localhost in development.
+const allowedOrigins = [
+  process.env.FRONTEND_URL,          // e.g. https://fehuvia.vercel.app
+  'http://localhost:5173',
+  'http://localhost:4173',
+  'http://localhost:3000'
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (curl, Postman, Render health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+  },
+  credentials: true
+}));
 app.use(express.json());
+
 
 // Return JSON for malformed API payloads instead of Express's default HTML error page.
 app.use((err, req, res, next) => {
@@ -21,6 +44,22 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// Instantiate Gas Dispenser Service with RPC Provider and Wallet signer
+let rpcUrl = process.env.MORPH_TESTNET_RPC || "https://rpc-hoodi.morph.network";
+let privateKey = process.env.PRIVATE_KEY;
+let dispenserWallet = null;
+
+if (privateKey) {
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const formattedKey = privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
+    dispenserWallet = new ethers.Wallet(formattedKey, provider);
+    console.log(`📡 [Gas Dispenser Service] Initialized with wallet address: ${dispenserWallet.address}`);
+  } catch (err) {
+    console.error("⚠️ [Gas Dispenser Service] Failed to initialize dispenser signer:", err.message);
+  }
+}
 
 // Global authoritative USD to PHP exchange rate (real-life fallback)
 let usdPhpRate = 58.30;
@@ -71,8 +110,17 @@ app.post('/api/auth/signup', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  const pass = password || '';
+  const hasMinLen = pass.length >= 8;
+  const hasUpper = /[A-Z]/.test(pass);
+  const hasLower = /[a-z]/.test(pass);
+  const hasNumber = /[0-9]/.test(pass);
+  const hasSpecial = /[^A-Za-z0-9]/.test(pass);
+
+  if (!hasMinLen || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+    return res.status(400).json({
+      error: 'Password must be at least 8 characters long and contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.'
+    });
   }
 
   try {
@@ -103,48 +151,27 @@ app.post('/api/auth/signup', async (req, res) => {
 
     console.log(`✅ New user registered: ${user.email}`);
 
-    // Seed default invoices and premium balances ONLY for the admin account
-    if (user.email.toLowerCase() === 'admin@fehuvia.com') {
-      await db.query(
-        'UPDATE users SET balance = 1289401.07, portfolio_value = 2847392.00 WHERE id = $1',
-        [user.id]
-      );
-      user.balance = 1289401.07;
-      user.portfolio_value = 2847392.00;
+    // Seed all newly registered accounts with the identical premium presentation demo state
+    await seedDemoUser(user.id, user.wallet_address);
 
-      const defaultSuppliers = [
-        { name: 'Morph Logistics Corp', amount: 2500.00, due: '2026-06-02', status: 'safe', reason: 'AI Recommendation: Safe to pay. Cash reserves are projected to remain robust (>45 days runway) even post-settlement.' },
-        { name: 'Cyber Security Audit Group', amount: 4500.00, due: '2026-06-08', status: 'delay', reason: 'AI Recommendation: Postpone payment. Upcoming payroll on Jun 5 introduces liquidity risk; delay past Jun 10 to balance inflow.' },
-        { name: 'Aera Office Properties', amount: 3500.00, due: '2026-05-30', status: 'safe', reason: 'AI Recommendation: Safe to pay. Critical supply chain vendor. Maintaining good standing prevents logistics delays.' },
-        { name: 'Elite Office Materials', amount: 1200.00, due: '2026-06-15', status: 'review', reason: 'AI Recommendation: Review manually. Payment amount matches a duplicate billing range. Validate audit log prior to signing.' }
-      ];
-
-      for (let index = 0; index < defaultSuppliers.length; index++) {
-        const item = defaultSuppliers[index];
-        const supRes = await db.query('SELECT id FROM suppliers WHERE name = $1', [item.name]);
-        if (supRes.rowCount > 0) {
-          const supplierId = supRes.rows[0].id;
-          const invoiceId = `INV-${user.id.substring(0, 4).toUpperCase()}-${String(index + 1).padStart(3, '0')}`;
-          await db.query(
-            `INSERT INTO invoices (id, user_id, supplier_id, amount, issue_date, due_date, status, ai_status, ai_reason)
-             VALUES ($1, $2, $3, $4, CURRENT_DATE - 5, $5, 'pending', $6, $7)`,
-            [invoiceId, user.id, supplierId, item.amount, item.due, item.status, item.reason]
-          );
-        }
-      }
-    }
+    // Retrieve the fully seeded user details from the database
+    const seededRes = await db.query(
+      'SELECT id, username, email, wallet_address, balance, portfolio_value, created_at FROM users WHERE id = $1',
+      [user.id]
+    );
+    const seededUser = seededRes.rows[0];
 
     res.status(201).json({
       message: 'Account created successfully.',
       token,
       user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        walletAddress: user.wallet_address,
-        balance: parseFloat(user.balance),
-        portfolioValue: parseFloat(user.portfolio_value),
-        createdAt: user.created_at
+        id: seededUser.id,
+        username: seededUser.username,
+        email: seededUser.email,
+        walletAddress: seededUser.wallet_address,
+        balance: parseFloat(seededUser.balance),
+        portfolioValue: parseFloat(seededUser.portfolio_value),
+        createdAt: seededUser.created_at
       }
     });
   } catch (error) {
@@ -176,6 +203,41 @@ async function seedMerchantAccounts() {
       wallet: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
       balance: 950000.00,
       portfolio: 2100000.00
+    },
+    {
+      username: 'Apex Telecom Inc',
+      email: 'apex@fehuvia.com',
+      wallet: '0x932258B0Be4E1AB326ed45FABf6206D3e6dcBAE7',
+      balance: 1200000.00,
+      portfolio: 2400000.00
+    },
+    {
+      username: 'Brankas Tech Ltd',
+      email: 'brankas@fehuvia.com',
+      wallet: '0x4C5c7defBD899EEc4Ee052801F995611f7CFD8a3',
+      balance: 2800000.00,
+      portfolio: 5600000.00
+    },
+    {
+      username: 'Vertex Analytics Co',
+      email: 'vertex@fehuvia.com',
+      wallet: '0x7859dd323fC6E14869eDb8bf510F24f1F9467642',
+      balance: 3500000.00,
+      portfolio: 700000.00
+    },
+    {
+      username: 'Aera Properties',
+      email: 'aera@fehuvia.com',
+      wallet: '0xb620133d01128B060E43fA999a529a1a6da42F5c',
+      balance: 4200000.00,
+      portfolio: 9000000.00
+    },
+    {
+      username: 'StraitsX Liquidity',
+      email: 'straitsx@fehuvia.com',
+      wallet: '0x555eE37C2f0819E89a1909076Ec9B570b1A45b22',
+      balance: 1850000.00,
+      portfolio: 3900000.00
     }
   ];
 
@@ -207,13 +269,16 @@ async function seedMerchantAccounts() {
 }
 
 // Pristine database self-refresh helper for presentation Demo accounts
-async function seedDemoUser(userId) {
+async function seedDemoUser(userId, walletAddressOverride = null) {
   // Seed the dummy merchant accounts so they exist and are ready for P2P transactions!
   await seedMerchantAccounts();
 
-  // Clear any existing invoices and recommendations for this user to make it fresh on every login!
+  // Clear any existing invoices, recommendations, and transactions for this user to make it fresh on every login!
   await db.query('DELETE FROM invoices WHERE user_id = $1', [userId]);
   await db.query('DELETE FROM ai_recommendations WHERE invoice_id IN (SELECT id FROM invoices WHERE user_id = $1)', [userId]);
+  await db.query('DELETE FROM transactions WHERE user_id = $1', [userId]);
+
+  const walletAddr = walletAddressOverride || '0xdemo7970C51812dc3A010C7d01b50e0d17dc79d0';
 
   // Ensure balance and demo status is updated
   await db.query(
@@ -223,25 +288,26 @@ async function seedDemoUser(userId) {
        portfolio_value = 15000000.00, 
        bank_linked = TRUE, 
        bank_name = 'GCash',
-       wallet_address = '0xdemo7970C51812dc3A010C7d01b50e0d17dc79d0',
+       wallet_address = $2,
        automation_level = 'semi',
        risk_profile = 'balanced',
        linked_banks = '[{"id":"gcash","name":"GCash Corporate Wallet","short":"GCash","balance":12500000.00,"type":"wallet","isLinked":true},{"id":"bdo","name":"Banco de Oro (BDO)","short":"BDO","balance":4500000.00,"type":"bank","isLinked":false},{"id":"ubp","name":"UnionBank of the Philippines","short":"UnionBank","balance":3200000.00,"type":"bank","isLinked":false},{"id":"bpi","name":"Bank of the Philippine Islands (BPI)","short":"BPI","balance":5800000.00,"type":"bank","isLinked":false},{"id":"maya","name":"Maya Business Account","short":"Maya","balance":1200000.00,"type":"wallet","isLinked":false}]'::jsonb
      WHERE id = $1`,
-    [userId]
+    [userId, walletAddr]
   );
 
   const defaultSuppliers = [
     { name: 'Morph Logistics', amount: 4500.00, due: '2026-06-02', status: 'safe', reason: 'AI Recommendation: Safe to pay. Cash reserves are projected to remain robust (>45 days runway) even post-settlement.', dest: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' },
     { name: 'Cyber Audit', amount: 15000.00, due: '2026-06-08', status: 'delay', reason: 'AI Recommendation: Postpone payment. Upcoming payroll on Jun 5 introduces liquidity risk; delay past Jun 10 to balance inflow.', dest: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' },
-    { name: 'Aera Office Properties', amount: 3500.00, due: '2026-05-30', status: 'safe', reason: 'AI Recommendation: Safe to pay. Critical supply chain vendor. Maintaining good standing prevents logistics delays.', dest: 'BDO (1092-2901-4820)' },
+    { name: 'Aera Properties', amount: 3500.00, due: '2026-05-30', status: 'safe', reason: 'AI Recommendation: Safe to pay. Critical supply chain vendor. Maintaining good standing prevents logistics delays.', dest: '0xb620133d01128B060E43fA999a529a1a6da42F5c' },
     { name: 'Elite Office', amount: 72000.00, due: '2026-06-15', status: 'review', reason: 'AI Recommendation: Review manually. Large invoice exceeds standard SME daily operating threshold. Verify authorization logs before settlement.', dest: '0x90F79bf6EB2c4f870365E785982E1f101E93b906' },
-    { name: 'Vertex Analytics Co', amount: 25000.00, due: '2026-06-20', status: 'safe', reason: 'AI Recommendation: Safe to pay. High ROI reporting asset. Clearing preserves database maintenance service agreements.', dest: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' },
-    { name: 'Apex Telecom Inc', amount: 8200.00, due: '2026-06-22', status: 'safe', reason: 'AI Recommendation: Safe to pay. Corporate connectivity vendor. Essential utility maintenance ensures continuous online presence.', dest: 'GCash (0918-290-1289)' },
-    { name: 'Brankas Tech Ltd', amount: 12000.00, due: '2026-06-10', status: 'delay', reason: 'AI Recommendation: Postpone payment. Cash balance projection dips below 30 days around due date. Delaying past payroll optimizes liquidity.', dest: '0x90F79bf6EB2c4f870365E785982E1f101E93b906' },
+    { name: 'Vertex Analytics Co', amount: 25000.00, due: '2026-06-20', status: 'safe', reason: 'AI Recommendation: Safe to pay. High ROI reporting asset. Clearing preserves database maintenance service agreements.', dest: '0x7859dd323fC6E14869eDb8bf510F24f1F9467642' },
+    { name: 'Apex Telecom Inc', amount: 8200.00, due: '2026-06-22', status: 'safe', reason: 'AI Recommendation: Safe to pay. Corporate connectivity vendor. Essential utility maintenance ensures continuous online presence.', dest: '0x932258B0Be4E1AB326ed45FABf6206D3e6dcBAE7' },
+    { name: 'Brankas Tech Ltd', amount: 12000.00, due: '2026-06-10', status: 'delay', reason: 'AI Recommendation: Postpone payment. Cash balance projection dips below 30 days around due date. Delaying past payroll optimizes liquidity.', dest: '0x4C5c7defBD899EEc4Ee052801F995611f7CFD8a3' },
     { name: 'Cyber Audit', amount: 9500.00, due: '2026-06-18', status: 'safe', reason: 'AI Recommendation: Safe to pay. Compliance verification fee. Pre-approved corporate expense to ensure secure banking linkages.', dest: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' },
     { name: 'Elite Office', amount: 1800.00, due: '2026-06-28', status: 'safe', reason: 'AI Recommendation: Safe to pay. Low amount will not materially affect general corporate liquidity or cash runway.', dest: '0x90F79bf6EB2c4f870365E785982E1f101E93b906' },
-    { name: 'Morph Logistics', amount: 5400.00, due: '2026-06-12', status: 'delay', reason: 'AI Recommendation: Postpone payment. Upcoming B2B supplier bulk purchases introduce short-term capital constraints. Delay 5 days recommended.', dest: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }
+    { name: 'Morph Logistics', amount: 5400.00, due: '2026-06-12', status: 'delay', reason: 'AI Recommendation: Postpone payment. Upcoming B2B supplier bulk purchases introduce short-term capital constraints. Delay 5 days recommended.', dest: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' },
+    { name: 'StraitsX Liquidity', amount: 50000.00, due: '2026-06-25', status: 'safe', reason: 'AI Recommendation: Safe to pay. Key liquidity routing partner. Clearing maintains outstanding token conversion rails.', dest: '0x555eE37C2f0819E89a1909076Ec9B570b1A45b22' }
   ];
 
 
@@ -259,7 +325,7 @@ async function seedDemoUser(userId) {
       supplierId = insertSup.rows[0].id;
     }
 
-    const invoiceId = `INV-DEMO-${String(index + 1).padStart(3, '0')}`;
+    const invoiceId = `INV-${userId.substring(0, 8).toUpperCase()}-${String(index + 1).padStart(3, '0')}`;
     const invoiceStatus = (item.name === 'Aera Office Properties') ? 'settled' : 'pending';
     const txHash = (invoiceStatus === 'settled') ? '0xmockdemo605a9ee6284739200fdc55ef21e' : null;
 
@@ -268,6 +334,55 @@ async function seedDemoUser(userId) {
        VALUES ($1, $2, $3, $4, CURRENT_DATE - 5, $5, $6, $7, $8, $9)`,
       [invoiceId, userId, supplierId, item.amount, item.due, invoiceStatus, txHash, item.status, item.reason]
     );
+  }
+
+  // Seed default transaction history logs for pristine demo display
+  const pastDate1 = new Date(); pastDate1.setDate(pastDate1.getDate() - 1);
+  const pastDate2 = new Date(); pastDate2.setDate(pastDate2.getDate() - 2);
+  const pastDate3 = new Date(); pastDate3.setDate(pastDate3.getDate() - 3);
+
+  const demoTransactions = [
+    {
+      type: 'invoice_settlement',
+      direction: null,
+      reference_id: 'INV-DEMO-003',
+      bank_name: null,
+      tx_hash: '0x605a9ee6284739200fdc55ef21e102f8cb8b9c8d1d8df5a92a7a5d3f2ef10b9d',
+      amount_usd: 3500.00,
+      amount_php: 204050.00,
+      timestamp: pastDate1.toISOString()
+    },
+    {
+      type: 'coin_conversion',
+      direction: 'fiat_to_token',
+      reference_id: 'TXN-GCASH-3920',
+      bank_name: 'GCash',
+      tx_hash: '0xdc3a010c7d01b50e0d17dc79c8d5fe210284739ef5b92cb82109e2fa3f20dcb8',
+      amount_usd: 15000.00,
+      amount_php: 874500.00,
+      timestamp: pastDate2.toISOString()
+    },
+    {
+      type: 'coin_conversion',
+      direction: 'token_to_fiat',
+      reference_id: 'TXN-BDO-1082',
+      bank_name: 'BDO',
+      tx_hash: '0x7a50e0d17dc79c8dc3a010c7d01b50e0d17dc79c8b0a9f5d2b7c7a31b2c45fe10',
+      amount_usd: 8000.00,
+      amount_php: 466400.00,
+      timestamp: pastDate3.toISOString()
+    }
+  ];
+
+  for (const tx of demoTransactions) {
+    try {
+      await db.query(`
+        INSERT INTO transactions (user_id, type, direction, reference_id, bank_name, tx_hash, amount_usd, amount_php, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [userId, tx.type, tx.direction, tx.reference_id, tx.bank_name, tx.tx_hash, tx.amount_usd, tx.amount_php, tx.timestamp]);
+    } catch (txErr) {
+      console.error('⚠️ [Database Seeding] Failed to seed historical transaction:', txErr.message);
+    }
   }
 }
 
@@ -441,10 +556,26 @@ app.post('/api/auth/onboarding', authenticateJWT, async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
+    const updatedUser = rows[0];
+
+    // Synchronize suppliers table wallet address for this partner merchant
+    if (updatedUser.wallet_address) {
+      // Find the user's username to match their supplier name entry
+      const userFullRes = await db.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+      if (userFullRes.rowCount > 0 && userFullRes.rows[0].username) {
+        const username = userFullRes.rows[0].username;
+        await db.query(
+          'UPDATE suppliers SET wallet_address = $1 WHERE LOWER(name) = $2',
+          [updatedUser.wallet_address.toLowerCase(), username.trim().toLowerCase()]
+        );
+        console.log(`🔗 Dynamically updated suppliers table wallet address for onboarding: "${username}" to ${updatedUser.wallet_address}`);
+      }
+    }
+
     console.log(`✅ Onboarding complete for user ID: ${req.user.id}`);
     res.json({
       message: 'Onboarding settings registered successfully.',
-      user: rows[0]
+      user: updatedUser
     });
   } catch (error) {
     console.error('Onboarding preference update error:', error.message);
@@ -454,12 +585,18 @@ app.post('/api/auth/onboarding', authenticateJWT, async (req, res) => {
 
 // RESET DEMO STATE - Resets all demo user data back to standard pristine presentation state on demand
 app.post('/api/auth/reset-demo', authenticateJWT, async (req, res) => {
-  if (req.user.email !== 'demo@fehuvia.com' && req.user.email !== 'admin@fehuvia.com') {
-    return res.status(403).json({ error: 'Only demo presentation accounts are authorized to reset database state.' });
+  // Allow all partner merchant and presentation accounts ending with @fehuvia.com to execute resets
+  const email = req.user.email || '';
+  if (!email.endsWith('@fehuvia.com')) {
+    return res.status(403).json({ error: 'Only demo and partner presentation accounts are authorized to reset database state.' });
   }
 
   try {
-    await seedDemoUser(req.user.id);
+    // Retrieve the user's current wallet address to preserve it during seeding
+    const userRes = await db.query('SELECT wallet_address FROM users WHERE id = $1', [req.user.id]);
+    const currentWallet = userRes.rowCount > 0 ? userRes.rows[0].wallet_address : null;
+
+    await seedDemoUser(req.user.id, currentWallet);
     console.log(`🔄 On-demand database reset executed for presentation demo user: ${req.user.email}`);
     res.json({ message: 'Demo state successfully reset to pristine presentation settings.' });
   } catch (err) {
@@ -690,7 +827,7 @@ app.post('/api/auth/wallet', authenticateJWT, async (req, res) => {
       UPDATE users 
       SET wallet_address = $1
       WHERE id = $2
-      RETURNING id, email, wallet_address, balance, portfolio_value
+      RETURNING id, email, username, wallet_address, balance, portfolio_value
     `;
     const { rows, rowCount } = await db.query(updateQuery, [
       walletAddress.toLowerCase(),
@@ -699,6 +836,17 @@ app.post('/api/auth/wallet', authenticateJWT, async (req, res) => {
 
     if (rowCount === 0) {
       return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const updatedUser = rows[0];
+
+    // Synchronize suppliers table wallet address for this partner merchant
+    if (updatedUser.username) {
+      await db.query(
+        'UPDATE suppliers SET wallet_address = $1 WHERE LOWER(name) = $2',
+        [walletAddress.toLowerCase(), updatedUser.username.trim().toLowerCase()]
+      );
+      console.log(`🔗 Dynamically updated suppliers table wallet address for: "${updatedUser.username}" to ${walletAddress}`);
     }
 
     console.log(`🔑 Wallet address linked successfully: ${walletAddress} for user: ${req.user.id}`);
@@ -742,10 +890,13 @@ app.get('/api/invoices', authenticateJWT, async (req, res) => {
         i.ai_reason AS "aiReason",
         s.name AS "supplier",
         s.wallet_address AS "supplierWallet",
-        CASE WHEN u.id IS NOT NULL THEN TRUE ELSE FALSE END AS "hasFehuviaAccount"
+        EXISTS (
+          SELECT 1 FROM users u 
+          WHERE LOWER(u.username) = LOWER(s.name) 
+             OR LOWER(u.wallet_address) = LOWER(s.wallet_address)
+        ) AS "hasFehuviaAccount"
       FROM invoices i
       JOIN suppliers s ON i.supplier_id = s.id
-      LEFT JOIN users u ON LOWER(u.username) = LOWER(s.name) OR LOWER(u.wallet_address) = LOWER(s.wallet_address)
       WHERE i.user_id = $1
       ORDER BY i.due_date ASC
     `;
@@ -915,8 +1066,23 @@ app.post('/api/invoices/scan', authenticateJWT, async (req, res) => {
   } else if (lowerName.includes('elite') || lowerName.includes('materials') || lowerName.includes('office')) {
     supplier = 'Elite Office';
     amount = 72000;
+  } else if (lowerName.includes('apex') || lowerName.includes('telecom')) {
+    supplier = 'Apex Telecom Inc';
+    amount = 24000;
+  } else if (lowerName.includes('brankas') || lowerName.includes('tech')) {
+    supplier = 'Brankas Tech Ltd';
+    amount = 38000;
+  } else if (lowerName.includes('vertex') || lowerName.includes('analytics')) {
+    supplier = 'Vertex Analytics Co';
+    amount = 12500;
+  } else if (lowerName.includes('aera') || lowerName.includes('properties')) {
+    supplier = 'Aera Properties';
+    amount = 85000;
+  } else if (lowerName.includes('straitsx') || lowerName.includes('liquidity')) {
+    supplier = 'StraitsX Liquidity';
+    amount = 50000;
   } else {
-    const suppliers = ['Apex Telecom Inc', 'Brankas Tech Ltd', 'Vertex Analytics Co', 'Cyber Audit', 'Morph Logistics'];
+    const suppliers = ['Apex Telecom Inc', 'Brankas Tech Ltd', 'Vertex Analytics Co', 'Cyber Audit', 'Morph Logistics', 'Aera Properties', 'StraitsX Liquidity'];
     supplier = suppliers[Math.floor(Math.random() * suppliers.length)];
     amount = Math.floor(Math.random() * 85000) + 1500;
   }
@@ -1135,10 +1301,31 @@ app.post('/api/invoices/:id/settle', authenticateJWT, async (req, res) => {
             [amountToDeductPHP, recipient.id]
           );
           console.log(`🎁 [Peer-to-Peer Settlement] Credited merchant account "${recipient.username}" (${recipient.email}) with +₱${amountToDeductPHP} (Converted from $${amountToDeductUSD} USDC)`);
+
+          // Log an incoming transaction for the receiving supplier/merchant (recipient)
+          try {
+            await db.query(`
+              INSERT INTO transactions (user_id, type, direction, reference_id, bank_name, tx_hash, amount_usd, amount_php)
+              VALUES ($1, 'invoice_settlement', 'incoming', $2, NULL, $3, $4, $5)
+            `, [recipient.id, id, txHash, amountToDeductUSD, amountToDeductPHP]);
+            console.log(`🎁 [Peer-to-Peer Settlement] Logged incoming transaction for recipient merchant: ${recipient.username}`);
+          } catch (recTxnErr) {
+            console.error('⚠️ [Peer-to-Peer Settlement] Failed to log incoming transaction for supplier:', recTxnErr.message);
+          }
         }
       }
     } catch (supErr) {
       console.error('⚠️ [Peer-to-Peer Settlement] Failed to credit supplier merchant account:', supErr.message);
+    }
+
+    // Log to transactions database table for the buyer (outgoing)
+    try {
+      await db.query(`
+        INSERT INTO transactions (user_id, type, direction, reference_id, bank_name, tx_hash, amount_usd, amount_php)
+        VALUES ($1, 'invoice_settlement', 'outgoing', $2, NULL, $3, $4, $5)
+      `, [req.user.id, id, txHash, amountToDeductUSD, amountToDeductPHP]);
+    } catch (txnLogErr) {
+      console.error('⚠️ [Database Telemetry] Failed to log invoice settlement to transactions:', txnLogErr.message);
     }
 
     res.json({
@@ -1153,13 +1340,14 @@ app.post('/api/invoices/:id/settle', authenticateJWT, async (req, res) => {
 
 // 4.5 TREASURY CONVERSION BRIDGE ENDPOINT (Protected)
 app.post('/api/bridge/convert', authenticateJWT, async (req, res) => {
-  const { direction, amountUSD, selectedBankId } = req.body;
+  const { direction, amountUSD, selectedBankId, txHash: bodyTxHash } = req.body;
 
   if (!direction || !amountUSD || parseFloat(amountUSD) <= 0) {
     return res.status(400).json({ error: 'Direction and valid positive amount are required.' });
   }
 
   const amountPHP = parseFloat(amountUSD) * usdPhpRate;
+  const txHash = bodyTxHash || `0xmockbridge${direction === 'fiat_to_token' ? 'in' : 'out'}${Date.now().toString(16)}`;
 
   try {
     // Fetch active user traditional cash balance and linked banks
@@ -1232,17 +1420,122 @@ app.post('/api/bridge/convert', authenticateJWT, async (req, res) => {
 
     console.log(`🔄 [Treasury Conversion Bridge] ${username} successfully converted $${amountUSD} USDC (${direction === 'fiat_to_token' ? 'PHP -> USDC' : 'USDC -> PHP'}). New total cash balance: ₱${totalBalance} (Debited/Credited specific bank: ${targetBankId})`);
 
+    const bankNameShort = targetBank.short || 'Treasury';
+    const refId = `TXN-${bankNameShort.replace(/\s+/g, '').toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Log to transactions database table
+    try {
+      await db.query(`
+        INSERT INTO transactions (user_id, type, direction, reference_id, bank_name, tx_hash, amount_usd, amount_php)
+        VALUES ($1, 'coin_conversion', $2, $3, $4, $5, $6, $7)
+      `, [req.user.id, direction, refId, bankNameShort, txHash, parseFloat(amountUSD), amountPHP]);
+    } catch (txnLogErr) {
+      console.error('⚠️ [Database Telemetry] Failed to log bridge conversion to transactions:', txnLogErr.message);
+    }
+
     res.json({
       message: 'Conversion completed successfully and registered in physical treasury ledger.',
       balance: parseFloat(updateRes.rows[0].balance),
       portfolioValue: parseFloat(updateRes.rows[0].portfolio_value),
       linkedBanks: updateRes.rows[0].linkedBanks || [],
       amountPHP,
-      amountUSD: parseFloat(amountUSD)
+      amountUSD: parseFloat(amountUSD),
+      txHash: txHash
     });
   } catch (error) {
     console.error('Error executing manual conversion:', error.message);
     res.status(500).json({ error: 'Failed to execute treasury bridge conversion.' });
+  }
+});
+
+// =============================================
+// TRANSACTION TELEMETRY & GAS DISPENSER
+// =============================================
+
+// GET TRANSACTION LEDGER - Retrieve unified transaction logs for the authorized user
+app.get('/api/transactions', authenticateJWT, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT 
+        id,
+        type,
+        direction,
+        reference_id AS "referenceId",
+        bank_name AS "bankName",
+        tx_hash AS "txHash",
+        amount_usd AS "amountUsd",
+        amount_php AS "amountPhp",
+        timestamp
+      FROM transactions
+      WHERE user_id = $1
+      ORDER BY timestamp DESC
+    `, [req.user.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ error: 'Failed to retrieve transaction logs.' });
+  }
+});
+
+// GAS DISPENSER FAUCET - Send 0.002 Morph testnet ETH to a connected browser wallet for gas!
+app.post('/api/faucet/drip', authenticateJWT, async (req, res) => {
+  const { walletAddress } = req.body;
+
+  if (!walletAddress || !ethers.utils.isAddress(walletAddress)) {
+    return res.status(400).json({ error: 'A valid Ethereum wallet address is required.' });
+  }
+
+  if (!dispenserWallet) {
+    return res.status(503).json({ error: 'Gas dispenser service is currently offline.' });
+  }
+
+  try {
+    const provider = dispenserWallet.provider;
+    
+    // Check target balance
+    const userBalance = await provider.getBalance(walletAddress);
+    const threshold = ethers.utils.parseEther("0.0015");
+    
+    if (userBalance.gt(threshold)) {
+      console.log(`ℹ️ [Gas Dispenser] Wallet ${walletAddress} already has sufficient gas: ${ethers.utils.formatEther(userBalance)} ETH`);
+      return res.json({ 
+        success: true, 
+        message: 'Wallet already has sufficient testnet gas.',
+        txHash: '0x0',
+        dripped: false 
+      });
+    }
+
+    // Check dispenser balance
+    const dispenserBalance = await provider.getBalance(dispenserWallet.address);
+    const dripAmount = ethers.utils.parseEther("0.002");
+    
+    if (dispenserBalance.lt(dripAmount)) {
+      return res.status(500).json({ error: 'Dispenser wallet has insufficient testnet ETH. Please fund dispenser wallet.' });
+    }
+
+    console.log(`💧 [Gas Dispenser] Dripping 0.002 ETH to ${walletAddress}...`);
+    
+    const tx = await dispenserWallet.sendTransaction({
+      to: walletAddress,
+      value: dripAmount
+    });
+    
+    tx.wait().then(receipt => {
+      console.log(`✅ [Gas Dispenser] Successfully dripped gas. Tx: ${receipt.transactionHash}`);
+    }).catch(err => {
+      console.error(`❌ [Gas Dispenser] Drip receipt error:`, err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'Successfully dripped 0.002 Morph Testnet ETH gas to your wallet.',
+      txHash: tx.hash,
+      dripped: true
+    });
+  } catch (error) {
+    console.error('Error dripping testnet ETH:', error.message);
+    res.status(500).json({ error: 'Gas dispenser transaction failed. Please try again in a moment.' });
   }
 });
 
@@ -1333,6 +1626,84 @@ app.listen(PORT, async () => {
   console.log(`=========================================\n`);
   
   try {
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      )
+    `);
+    const usersTableExists = tableCheck.rows[0].exists;
+    if (!usersTableExists) {
+      console.log("💾 [Database Init] 'users' table not found. Initializing primary tables and counterparties...");
+      
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            username VARCHAR(50),
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            wallet_address VARCHAR(42),
+            balance NUMERIC(15, 2) NOT NULL DEFAULT 0.00,
+            portfolio_value NUMERIC(15, 2) NOT NULL DEFAULT 0.00,
+            automation_level VARCHAR(20) DEFAULT 'semi',
+            conversion_preference VARCHAR(20) DEFAULT 'manual',
+            risk_profile VARCHAR(20) DEFAULT 'balanced',
+            bank_linked BOOLEAN DEFAULT FALSE,
+            bank_name VARCHAR(100),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS suppliers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
+            wallet_address VARCHAR(42) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS invoices (
+            id VARCHAR(100) PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+            supplier_id UUID REFERENCES suppliers(id) ON DELETE CASCADE NOT NULL,
+            amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+            issue_date DATE NOT NULL,
+            due_date DATE NOT NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'settled', 'scheduled')),
+            tx_hash VARCHAR(66) DEFAULT NULL,
+            ai_status VARCHAR(20) NOT NULL DEFAULT 'review' CHECK (ai_status IN ('safe', 'delay', 'review')),
+            ai_reason TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_recommendations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            invoice_id VARCHAR(100) REFERENCES invoices(id) ON DELETE CASCADE NOT NULL,
+            status VARCHAR(20) NOT NULL CHECK (status IN ('safe', 'delay', 'review')),
+            reason TEXT NOT NULL,
+            predicted_runway INTEGER,
+            cash_flow_trend VARCHAR(20),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+        );
+      `);
+
+      await db.query(`
+        INSERT INTO suppliers (id, name, email, wallet_address) VALUES
+        ('b2a1a8c9-04fa-4d6d-b8d4-53a5e8bcf6ba', 'Morph Logistics Corp', 'billing@morphlogistics.io', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8') ON CONFLICT DO NOTHING;
+        INSERT INTO suppliers (id, name, email, wallet_address) VALUES
+        ('c3f1b4a6-7789-4d6d-bcf6-88ef5b48bc12', 'Cyber Security Audit Group', 'payments@cyberaudit.ph', '0x3C44Cd356D2255267510d944e2b0270a29E2F899') ON CONFLICT DO NOTHING;
+        INSERT INTO suppliers (id, name, email, wallet_address) VALUES
+        ('d4e1b8c2-23c4-4b5b-a7e8-99df89bcf234', 'Aera Office Properties', 'rent@aeraviews.com', '0x90F79bf6EB2c4f870365E785982E1f101E93b906') ON CONFLICT DO NOTHING;
+        INSERT INTO suppliers (id, name, email, wallet_address) VALUES
+        ('e5f1c9d3-34d5-4c6c-b8f9-aaef99bcf456', 'Elite Office Materials', 'orders@eliteoffice.ph', '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65') ON CONFLICT DO NOTHING;
+      `);
+      console.log("✅ [Database Init] Primary tables and counterparties successfully initialized!");
+    }
+  } catch (err) {
+    console.error("⚠️ [Database Init] Critical error during automatic database initialization:", err.message);
+  }
+
+  try {
     // Database schema migration: add linked_banks JSONB column to users table if not exists
     await db.query(`
       ALTER TABLE users 
@@ -1341,6 +1712,27 @@ app.listen(PORT, async () => {
     console.log("💾 [Database Schema] Verified 'linked_banks' column in users table.");
   } catch (err) {
     console.warn("⚠️ [Database Schema] Could not verify or add linked_banks column:", err.message);
+  }
+
+  try {
+    // Create transactions database table if not exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        direction VARCHAR(50),
+        reference_id VARCHAR(100),
+        bank_name VARCHAR(100),
+        tx_hash VARCHAR(100) NOT NULL,
+        amount_usd DECIMAL(18, 2) NOT NULL,
+        amount_php DECIMAL(18, 2) NOT NULL,
+        timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("💾 [Database Schema] Verified 'transactions' table.");
+  } catch (err) {
+    console.warn("⚠️ [Database Schema] Could not verify or create transactions table:", err.message);
   }
 
   try {

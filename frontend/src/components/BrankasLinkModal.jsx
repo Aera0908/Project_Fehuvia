@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ShieldCheck, Key, Landmark, AlertCircle, Phone, Delete } from 'lucide-react';
+import { BankLogo } from './BankLogo';
 
 export default function BrankasLinkModal({ isOpen, initialBank, onClose, onLinkSuccess }) {
   const [selectedBank, setSelectedBank] = useState(null); // 'bdo', 'bpi', 'ubp', 'gcash', 'maya'
@@ -23,6 +24,39 @@ export default function BrankasLinkModal({ isOpen, initialBank, onClose, onLinkS
   if (!isOpen) return null;
 
   const handleConnect = (e) => {
+    if (e) e.preventDefault();
+    setError('');
+
+    if (otpCode.length < 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    if (otpCode !== '123456') {
+      setError('Invalid sandbox OTP code. Please enter 123456.');
+      return;
+    }
+
+    setLoading(true);
+
+    // Simulate open finance authorization latency
+    setTimeout(() => {
+      setLoading(false);
+      onLinkSuccess({
+        bankName: selectedBank.short,
+        bankId: selectedBank.id,
+        balance: selectedBank.id === 'ubp' ? 3200000.00 :
+                 selectedBank.id === 'bdo' ? 4500000.00 :
+                 selectedBank.id === 'bpi' ? 5800000.00 :
+                 selectedBank.id === 'gcash' ? 12500000.00 :
+                 selectedBank.id === 'maya' ? 1200000.00 : 12500000.00
+      });
+      setSelectedBank(null);
+      setOtpCode('');
+    }, 2500);
+  };
+
+  const handleVerifyCode = (e) => {
     if (e) e.preventDefault();
     setError('');
 
@@ -96,8 +130,8 @@ export default function BrankasLinkModal({ isOpen, initialBank, onClose, onLinkS
           <>
             {/* Direct SMS OTP Gate Screen */}
             <div className="text-center mb-6">
-              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-bold text-lg text-white mx-auto mb-3 ${logoBg} shadow-lg`}>
-                {selectedBank.short.substring(0, 2).toUpperCase()}
+              <div className="flex justify-center mb-3">
+                <BankLogo bankId={selectedBank.id} className="w-12 h-12" />
               </div>
               <h2 className="font-cormorant text-2xl font-light tracking-wide text-white">
                 Authorize {selectedBank.short}

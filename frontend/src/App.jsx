@@ -33,7 +33,7 @@ function App() {
     if (!token) return;
 
     // Validate the stored token against the backend
-    fetch('http://localhost:3001/api/auth/me', {
+    fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001'}/api/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => {

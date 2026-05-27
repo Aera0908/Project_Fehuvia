@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileText, TrendingUp, Settings, Wallet, BarChart3, Bell, HelpCircle, LogOut, ArrowLeftRight, Landmark } from 'lucide-react';
+import { LayoutDashboard, FileText, TrendingUp, Settings, BarChart3, Bell, HelpCircle, LogOut, ArrowLeftRight, Landmark, History } from 'lucide-react';
 import logoGold from '../../assets/images/logo-plain-gold.png';
 
 export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) {
@@ -8,8 +8,8 @@ export function Sidebar({ setView, currentPage, setCurrentPage, handleLogout }) 
     { icon: Landmark, label: 'Treasury' },
     { icon: TrendingUp, label: 'Cash Flow' },
     { icon: FileText, label: 'Invoices' },
-    { icon: Wallet, label: 'Payments' },
     { icon: ArrowLeftRight, label: 'Bridge' },
+    { icon: History, label: 'Transactions' },
     { icon: BarChart3, label: 'Analytics' },
   ];
 
