@@ -313,13 +313,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
   // Trigger general loading simulation on mount to let skeletons shimmer beautifully!
   useEffect(() => {
-    if (predictions !== null && invoices.length > 0) {
-      const timer = setTimeout(() => {
-        setDashboardLoading(false);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [predictions, invoices]);
+    const timer = setTimeout(() => {
+      setDashboardLoading(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Settled Payments Log State (initially loaded from backend database)
   const [payments, setPayments] = useState([]);
