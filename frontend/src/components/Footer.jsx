@@ -39,7 +39,9 @@ export default function Footer({ footerRef, isVisible, onPageSelect }) {
           <h4 className="text-xs font-bold uppercase tracking-[0.25em] text-[#e4c37a]/80">Resources</h4>
           <div className="flex flex-col space-y-2.5 text-xs text-white/55 font-light">
             <a href="#" onClick={(e) => handleLinkClick(e, 'documentation')} className="hover:text-[#e4c37a] transition-colors">Documentation</a>
-            <a href="#" onClick={(e) => handleLinkClick(e, 'developer-portal')} className="hover:text-[#e4c37a] transition-colors">Developer Portal</a>
+            <button type="button" disabled className="cursor-not-allowed text-white/20 transition-colors text-left">
+              Developer Portal
+            </button>
             <a href="#" onClick={(e) => handleLinkClick(e, 'smart-contracts')} className="hover:text-[#e4c37a] transition-colors">Smart Contracts</a>
             <a href="#" onClick={(e) => handleLinkClick(e, 'morph-explorer')} className="hover:text-[#e4c37a] transition-colors">Morph L2 Explorer</a>
           </div>
