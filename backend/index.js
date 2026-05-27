@@ -25,7 +25,14 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (curl, Postman, Render health checks)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+    
+    const cleanOrigin = origin.replace(/\/$/, '').toLowerCase();
+    const isAllowed = allowedOrigins.some(allowed => {
+      const cleanAllowed = allowed.replace(/\/$/, '').toLowerCase();
+      return cleanOrigin === cleanAllowed;
+    });
+
+    if (isAllowed) {
       return callback(null, true);
     }
     callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
