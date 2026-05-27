@@ -56,6 +56,13 @@ function App() {
   const sessionToken = localStorage.getItem('fehuvia_token');
   const activeView = sessionToken && view === 'landing' ? 'dashboard' : view;
 
+  // Handle URL sync when user is on the landing page (logged out)
+  useEffect(() => {
+    if (activeView === 'landing' && window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [activeView]);
+
   // Logout handler: clears session and returns to landing page
   const handleLogout = () => {
     localStorage.removeItem('fehuvia_token');
