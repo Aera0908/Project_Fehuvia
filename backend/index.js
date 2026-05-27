@@ -14,7 +14,8 @@ const app = express();
 // Environment-aware CORS: restrict to the configured frontend domain in production,
 // allow localhost in development.
 const allowedOrigins = [
-  process.env.FRONTEND_URL,          // e.g. https://fehuvia.vercel.app
+  process.env.FRONTEND_URL,          // e.g. https://fehuvia.app
+  process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace('://', '://www.') : null, // Auto-trust WWW subdomain variant!
   'http://localhost:5173',
   'http://localhost:4173',
   'http://localhost:3000'
