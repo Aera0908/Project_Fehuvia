@@ -1404,7 +1404,11 @@ app.post('/api/invoices/:id/settle', authenticateJWT, async (req, res) => {
           'UPDATE users SET balance = $1, linked_banks = $2 WHERE id = $3',
           [totalBalance, JSON.stringify(linkedBanks), req.user.id]
         );
-        console.log(`💸 Persistent Peso Balance deducted from ${targetBank.short}: -₱$    // Peer-to-Peer balance transfer: if the supplier is a registered Fehuvia user (merchant), credit their account!
+        console.log(`💸 Persistent Peso Balance deducted from ${targetBank.short}: -₱${amountToDeductPHP} (Converted from $${amountToDeductUSD} USDC)`);
+      }
+    }
+
+    // Peer-to-Peer balance transfer: if the supplier is a registered Fehuvia user (merchant), credit their account!
     try {
       const supRes = await db.query('SELECT name, wallet_address, email AS supplier_email FROM suppliers WHERE id = $1', [settledInvoice.supplier_id]);
       if (supRes.rowCount > 0) {
