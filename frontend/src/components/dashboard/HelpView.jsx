@@ -192,7 +192,7 @@ export function HelpView({ onStartTour }) {
               <div className="flex items-center justify-between border-t border-[#1b1b1d] pt-2 mt-1 text-[11px]">
                 <span className="text-[#6a6a6a]">Morph L2 Faucet</span>
                 <a 
-                  href="https://faucet.morph.network/" 
+                  href="https://morph-rails-hoodi.morph.network/faucet?ref=blog.morph.network" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="font-bold text-gold-metallic hover:underline flex items-center gap-1 cursor-pointer"

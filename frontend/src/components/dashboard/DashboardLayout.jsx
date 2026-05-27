@@ -2662,7 +2662,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
               </button>
 
               <a 
-                href="https://faucet.morph.network/" 
+                href="https://morph-rails-hoodi.morph.network/faucet?ref=blog.morph.network" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-[10px] text-[#D4AF37] hover:underline mt-4 inline-flex items-center gap-1 font-bold uppercase tracking-wider cursor-pointer"

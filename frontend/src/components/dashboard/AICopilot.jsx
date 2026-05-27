@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Sparkles, TrendingUp, AlertTriangle, ShieldAlert } from 'lucide-react';
 import AIRecommendationsModal from './AIRecommendationsModal';
 
 export function AICopilot({ predictions }) {
@@ -7,7 +7,29 @@ export function AICopilot({ predictions }) {
 
   let insights = [];
 
-  if (predictions && predictions.recommendations && predictions.recommendations.length > 0) {
+  if (predictions && predictions.copilot_insights && predictions.copilot_insights.length > 0) {
+    insights = predictions.copilot_insights.map(item => {
+      const typeLower = item.type.toLowerCase();
+      const type = item.title || item.type.charAt(0).toUpperCase() + item.type.slice(1);
+      const icon = typeLower === 'opportunity' 
+        ? TrendingUp 
+        : typeLower === 'alert' 
+        ? ShieldAlert 
+        : Sparkles;
+      const priority = typeLower === 'alert' 
+        ? 'high' 
+        : typeLower === 'opportunity' 
+        ? 'low' 
+        : 'medium';
+
+      return {
+        icon,
+        type,
+        message: item.message,
+        priority
+      };
+    });
+  } else if (predictions && predictions.recommendations && predictions.recommendations.length > 0) {
     const apiInsights = predictions.recommendations.map(rec => {
       const type = rec.status === 'safe' 
         ? 'Safe to Pay' 
@@ -87,12 +109,25 @@ export function AICopilot({ predictions }) {
           ) : (
             insights.map((insight, index) => {
               const Icon = insight.icon;
-              const priorityColors = {
-                high: { bg: 'rgba(212, 175, 55, 0.08)', border: 'rgba(212, 175, 55, 0.4)', icon: '#D4AF37' },
-                medium: { bg: 'rgba(251, 146, 60, 0.08)', border: 'rgba(251, 146, 60, 0.3)', icon: '#fb923c' },
-                low: { bg: 'rgba(74, 222, 128, 0.08)', border: 'rgba(74, 222, 128, 0.3)', icon: '#4ade80' }
-              };
-              const colors = priorityColors[insight.priority] || priorityColors.low;
+              const typeLower = insight.type.toLowerCase();
+              
+              let colors = { bg: 'rgba(74, 222, 128, 0.08)', border: 'rgba(74, 222, 128, 0.3)', icon: '#4ade80' }; // Default Opportunity/Green
+              
+              if (typeLower === 'alert') {
+                colors = { bg: 'rgba(248, 113, 113, 0.08)', border: 'rgba(248, 113, 113, 0.3)', icon: '#f87171' }; // Alert/Red
+              } else if (typeLower === 'insight') {
+                colors = { bg: 'rgba(56, 189, 248, 0.08)', border: 'rgba(56, 189, 248, 0.3)', icon: '#38bdf8' }; // Insight/Blue
+              } else if (typeLower === 'opportunity') {
+                colors = { bg: 'rgba(74, 222, 128, 0.08)', border: 'rgba(74, 222, 128, 0.3)', icon: '#4ade80' }; // Opportunity/Green
+              } else {
+                // Backward compatibility priority mapping
+                const priorityColors = {
+                  high: { bg: 'rgba(212, 175, 55, 0.08)', border: 'rgba(212, 175, 55, 0.4)', icon: '#D4AF37' },
+                  medium: { bg: 'rgba(251, 146, 60, 0.08)', border: 'rgba(251, 146, 60, 0.3)', icon: '#fb923c' },
+                  low: { bg: 'rgba(74, 222, 128, 0.08)', border: 'rgba(74, 222, 128, 0.3)', icon: '#4ade80' }
+                };
+                colors = priorityColors[insight.priority] || priorityColors.low;
+              }
 
               return (
                 <div key={index}
