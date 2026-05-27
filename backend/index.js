@@ -141,10 +141,10 @@ app.post('/api/auth/signup', async (req, res) => {
     // Hash the password with bcrypt (12 salt rounds for strong security)
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Insert the new user
+    // Insert the new user with 0 bank balance and pre-initialized unlinked demo banks
     const insertQuery = `
-      INSERT INTO users (username, email, password_hash, wallet_address)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (username, email, password_hash, wallet_address, balance, portfolio_value, bank_linked, bank_name, linked_banks)
+      VALUES ($1, $2, $3, $4, 0.00, 0.00, FALSE, NULL, '[{"id":"gcash","name":"GCash Corporate Wallet","short":"GCash","balance":12500000.00,"type":"wallet","isLinked":false},{"id":"bdo","name":"Banco de Oro (BDO)","short":"BDO","balance":4500000.00,"type":"bank","isLinked":false},{"id":"ubp","name":"UnionBank of the Philippines","short":"UnionBank","balance":3200000.00,"type":"bank","isLinked":false},{"id":"bpi","name":"Bank of the Philippine Islands (BPI)","short":"BPI","balance":5800000.00,"type":"bank","isLinked":false},{"id":"maya","name":"Maya Business Account","short":"Maya","balance":1200000.00,"type":"wallet","isLinked":false}]'::jsonb)
       RETURNING id, username, email, wallet_address, balance, portfolio_value, created_at
     `;
     const { rows } = await db.query(insertQuery, [
@@ -157,29 +157,19 @@ app.post('/api/auth/signup', async (req, res) => {
     const user = rows[0];
     const token = signToken(user);
 
-    console.log(`✅ New user registered: ${user.email}`);
-
-    // Seed all newly registered accounts with the identical premium presentation demo state
-    await seedDemoUser(user.id, user.wallet_address);
-
-    // Retrieve the fully seeded user details from the database
-    const seededRes = await db.query(
-      'SELECT id, username, email, wallet_address, balance, portfolio_value, created_at FROM users WHERE id = $1',
-      [user.id]
-    );
-    const seededUser = seededRes.rows[0];
+    console.log(`✅ New user registered (empty balance, demo banks ready): ${user.email}`);
 
     res.status(201).json({
       message: 'Account created successfully.',
       token,
       user: {
-        id: seededUser.id,
-        username: seededUser.username,
-        email: seededUser.email,
-        walletAddress: seededUser.wallet_address,
-        balance: parseFloat(seededUser.balance),
-        portfolioValue: parseFloat(seededUser.portfolio_value),
-        createdAt: seededUser.created_at
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        walletAddress: user.wallet_address,
+        balance: parseFloat(user.balance),
+        portfolioValue: parseFloat(user.portfolio_value),
+        createdAt: user.created_at
       }
     });
   } catch (error) {

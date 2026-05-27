@@ -148,6 +148,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
   
   // Active dashboard time sort filter
   const [dashboardTimeframe, setDashboardTimeframe] = useState('30 Days');
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   // User Profile
   const [userProfile, setUserProfile] = useState(() => {
@@ -309,6 +310,16 @@ export default function DashboardLayout({ setView, handleLogout }) {
     fetchPredictions();
     fetchPayments();
   }, []);
+
+  // Trigger general loading simulation on mount to let skeletons shimmer beautifully!
+  useEffect(() => {
+    if (predictions !== null && invoices.length > 0) {
+      const timer = setTimeout(() => {
+        setDashboardLoading(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [predictions, invoices]);
 
   // Settled Payments Log State (initially loaded from backend database)
   const [payments, setPayments] = useState([]);
@@ -2339,39 +2350,131 @@ export default function DashboardLayout({ setView, handleLogout }) {
               </div>
 
               {/* Forecast Area Chart + AI Recommendations Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div id="coach-runway-chart" className="lg:col-span-2">
-                  <CashflowPrediction predictions={predictions} balance={balance} timeframe={dashboardTimeframe} />
-                </div>
-                <div id="coach-copilot-sidebar">
-                  <AICopilot predictions={predictions} />
-                </div>
-              </div>
+              {dashboardLoading ? (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Forecast Area Chart Skeleton */}
+                    <div className="lg:col-span-2 plate-black-metallic p-6 border border-[#2C2C2C] h-[340px] animate-pulse relative overflow-hidden flex flex-col justify-between"
+                         style={{ background: 'linear-gradient(145deg, #0d0d0d 0%, #080808 100%)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02)' }}>
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-2">
+                          <div className="h-4 w-40 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                          <div className="h-3 w-64 bg-[#161618] border border-[#2C2C2C] rounded-md opacity-60"></div>
+                        </div>
+                        <div className="h-7 w-20 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                      </div>
+                      <div className="h-36 w-full bg-[#161618]/40 border border-[#2C2C2C]/50 rounded-xl relative overflow-hidden flex items-end p-2 gap-4">
+                        {Array.from({ length: 12 }).map((_, i) => (
+                          <div key={i} className="flex-1 bg-[#2C2C2C]/30 border border-[#2C2C2C]/40 rounded-t-md" style={{ height: `${20 + Math.sin(i) * 50}%` }}></div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="h-3 w-16 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                        <div className="h-3 w-16 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                        <div className="h-3 w-16 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                      </div>
+                    </div>
 
-              {/* Payables Ledger Table Panel */}
-              <div id="coach-payables-ledger" className="space-y-4">
-                <InvoiceManagement
-                  invoices={[
-                    ...invoices.filter(inv => inv.status !== 'settled'),
-                    ...invoices.filter(inv => inv.status === 'settled')
-                  ].slice(0, 5)}
-                  handleSettle={handleSettle}
-                  handleSchedule={handleSchedule}
-                  handleReview={handleReview}
-                  automationLevel={userProfile.automationLevel}
-                />
-                
-                {/* See All Invoices Navigation Button */}
-                <div className="flex justify-end pr-2">
-                  <button
-                    onClick={() => setCurrentPage('Invoices')}
-                    className="px-5 py-2.5 rounded-lg border border-[#2C2C2C] bg-[#0c0c0e]/60 hover:bg-[#161618] hover:border-[#D4AF37]/30 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
-                  >
-                    <span>See All Invoices</span>
-                    <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
-                  </button>
-                </div>
-              </div>
+                    {/* AI Copilot Sidebar Skeleton */}
+                    <div className="bg-[#0d0d0f] border border-[#2C2C2C] rounded-xl overflow-hidden p-6 h-[340px] animate-pulse flex flex-col justify-between"
+                         style={{ background: 'linear-gradient(145deg, #0d0d0d 0%, #080808 100%)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02)' }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-[#2C2C2C]/20 border border-[#2C2C2C]/50 flex items-center justify-center shrink-0"></div>
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-4 w-32 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                          <div className="h-3 w-24 bg-[#161618] border border-[#2C2C2C] rounded-md opacity-60"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-3 flex-1 mt-5">
+                        {Array.from({ length: 3 }).map((_, idx) => {
+                          const colors = idx === 0 
+                            ? 'border-emerald-500/10 bg-emerald-950/5' 
+                            : idx === 1 
+                            ? 'border-red-500/10 bg-red-950/5' 
+                            : 'border-blue-500/10 bg-blue-950/5';
+                          return (
+                            <div key={idx} className={`p-3 rounded-lg border ${colors} flex gap-3 items-center`}>
+                              <div className="w-8 h-8 rounded-lg bg-[#161618]/50 border border-[#2C2C2C]/40 shrink-0"></div>
+                              <div className="space-y-2 flex-1">
+                                <div className="h-2.5 w-16 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                                <div className="h-2 w-full bg-[#161618] border border-[#2C2C2C] rounded-md opacity-70"></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payables Ledger Table Panel Skeleton */}
+                  <div className="plate-black-metallic p-6 border border-[#2C2C2C] space-y-5 animate-pulse"
+                       style={{ background: 'linear-gradient(145deg, #0d0d0d 0%, #080808 100%)', boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.02)' }}>
+                    <div className="flex justify-between items-center border-b border-[#2C2C2C] pb-4">
+                      <div className="space-y-2">
+                        <div className="h-4 w-48 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                        <div className="h-3 w-72 bg-[#161618] border border-[#2C2C2C] rounded-md opacity-60"></div>
+                      </div>
+                      <div className="h-8 w-28 bg-[#161618] border border-[#2C2C2C] rounded-full"></div>
+                    </div>
+                    
+                    <div className="space-y-3.5">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-xl border border-[#2C2C2C]/40 bg-[#0c0c0e]/30 gap-4">
+                          <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <div className="w-9 h-9 rounded-xl bg-[#161618]/50 border border-[#2C2C2C]/40 flex items-center justify-center shrink-0"></div>
+                            <div className="space-y-2 flex-1">
+                              <div className="h-3 w-32 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                              <div className="h-2.5 w-20 bg-[#161618] border border-[#2C2C2C] rounded-md opacity-60"></div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-6 justify-between w-full sm:w-auto">
+                            <div className="h-3.5 w-16 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                            <div className="h-5 w-24 bg-[#161618] border border-[#2C2C2C] rounded-md"></div>
+                            <div className="h-8 w-24 bg-[#161618] border border-[#2C2C2C] rounded-full"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div id="coach-runway-chart" className="lg:col-span-2">
+                      <CashflowPrediction predictions={predictions} balance={balance} timeframe={dashboardTimeframe} />
+                    </div>
+                    <div id="coach-copilot-sidebar">
+                      <AICopilot predictions={predictions} />
+                    </div>
+                  </div>
+
+                  {/* Payables Ledger Table Panel */}
+                  <div id="coach-payables-ledger" className="space-y-4">
+                    <InvoiceManagement
+                      invoices={[
+                        ...invoices.filter(inv => inv.status !== 'settled'),
+                        ...invoices.filter(inv => inv.status === 'settled')
+                      ].slice(0, 5)}
+                      handleSettle={handleSettle}
+                      handleSchedule={handleSchedule}
+                      handleReview={handleReview}
+                      automationLevel={userProfile.automationLevel}
+                    />
+                    
+                    {/* See All Invoices Navigation Button */}
+                    <div className="flex justify-end pr-2">
+                      <button
+                        onClick={() => setCurrentPage('Invoices')}
+                        className="px-5 py-2.5 rounded-lg border border-[#2C2C2C] bg-[#0c0c0e]/60 hover:bg-[#161618] hover:border-[#D4AF37]/30 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                      >
+                        <span>See All Invoices</span>
+                        <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
 
