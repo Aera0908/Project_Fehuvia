@@ -1200,6 +1200,12 @@ app.post('/api/invoices/scan', authenticateJWT, async (req, res) => {
   } else if (lowerName.includes('straitsx') || lowerName.includes('liquidity')) {
     supplier = 'StraitsX Liquidity';
     amount = 50000;
+  } else if (lowerName.includes('global') || lowerName.includes('solutions')) {
+    supplier = 'Global Solutions Inc';
+    amount = 14500;
+  } else if (lowerName.includes('manila') || lowerName.includes('supplies')) {
+    supplier = 'Manila Supplies Co';
+    amount = 8200;
   } else {
     const suppliers = ['Apex Telecom Inc', 'Brankas Tech Ltd', 'Vertex Analytics Co', 'Cyber Audit', 'Morph Logistics', 'Aera Properties', 'StraitsX Liquidity'];
     supplier = suppliers[Math.floor(Math.random() * suppliers.length)];
