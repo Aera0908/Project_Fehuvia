@@ -14,6 +14,7 @@ export function BridgeView({
   setToast, 
   setNotifications, 
   setWalletUSDCBalance, 
+  gasTelemetry,
 
   prefilledBridgeInvoice,
   setPrefilledBridgeInvoice,
@@ -749,10 +750,32 @@ export function BridgeView({
                 <span className="text-[#a1a1a1] font-light">Conversion Fee:</span>
                 <span className="font-extrabold text-gold-metallic uppercase tracking-wider">Free (Demo Mode)</span>
               </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#a1a1a1] font-light">Network Gas Limit:</span>
-                <span className="text-white/60 font-light font-mono">&lt; 0.0001 ETH</span>
-              </div>
+              {/* Dynamic Gas Telemetry */}
+              {(() => {
+                const gasUsed = 65000; // estimated USDC mint/transfer gas limit
+                const ethFee = (gasUsed * (gasTelemetry?.gasPriceGwei || 1.5)) / 1000000000;
+                const usdFee = ethFee * (gasTelemetry?.ethPriceUsd || 3450);
+                const phpFee = usdFee * exchangeRate;
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-xs border-t border-white/5 pt-3">
+                      <span className="text-[#a1a1a1] font-light flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Network Gas Fee:
+                      </span>
+                      <span className="font-bold text-white font-mono">
+                        ~{ethFee.toFixed(6)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-[#a1a1a1] font-light">Gas Cost Valuation:</span>
+                      <span className="text-[#D4AF37] font-semibold font-mono">
+                        ₱{phpFee.toFixed(2)} PHP (${usdFee.toFixed(3)} USD)
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

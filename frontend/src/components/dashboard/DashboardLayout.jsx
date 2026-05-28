@@ -150,6 +150,70 @@ export default function DashboardLayout({ setView, handleLogout }) {
   const [dashboardTimeframe, setDashboardTimeframe] = useState('30 Days');
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
+  // Live gas fee telemetry state
+  const [gasTelemetry, setGasTelemetry] = useState({
+    gasPriceGwei: 1.50,
+    ethPriceUsd: 3450,
+    loading: false
+  });
+
+  const fetchLiveGasTelemetry = async () => {
+    setGasTelemetry(prev => ({ ...prev, loading: true }));
+    try {
+      let liveGasPriceGwei = 1.50;
+      let liveEthPrice = 3450;
+
+      // 1. Fetch live ETH-USD price from public API
+      try {
+        const rateRes = await fetch('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD');
+        const rateData = await rateRes.json();
+        if (rateData && rateData.USD) {
+          liveEthPrice = Number(rateData.USD);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch live ETH price, using fallback:', e);
+      }
+
+      // 2. Fetch live gas price from Morph RPC using ethers
+      try {
+        if (window.ethereum) {
+          const tempProvider = new ethers.BrowserProvider(window.ethereum);
+          const feeData = await tempProvider.getFeeData();
+          if (feeData && feeData.gasPrice) {
+            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
+          }
+        } else {
+          const rpcUrl = "https://rpc-hoodi.morph.network";
+          const tempProvider = new ethers.JsonRpcProvider(rpcUrl);
+          const feeData = await tempProvider.getFeeData();
+          if (feeData && feeData.gasPrice) {
+            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
+          }
+        }
+      } catch (err) {
+        try {
+          const rpcUrl = "https://rpc-hoodi.morph.network";
+          const tempProvider = new ethers.JsonRpcProvider(rpcUrl);
+          const feeData = await tempProvider.getFeeData();
+          if (feeData && feeData.gasPrice) {
+            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
+          }
+        } catch (rpcErr) {
+          console.warn('Failed to fetch gas price via RPC, using fallback:', rpcErr);
+        }
+      }
+
+      setGasTelemetry({
+        gasPriceGwei: parseFloat(liveGasPriceGwei.toFixed(3)),
+        ethPriceUsd: liveEthPrice,
+        loading: false
+      });
+    } catch (err) {
+      console.error('Failed to run dynamic gas telemetry fetch:', err);
+      setGasTelemetry(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   // User Profile
   const [userProfile, setUserProfile] = useState(() => {
     try {
@@ -309,6 +373,10 @@ export default function DashboardLayout({ setView, handleLogout }) {
     fetchInvoices();
     fetchPredictions();
     fetchPayments();
+    fetchLiveGasTelemetry();
+
+    const gasInterval = setInterval(fetchLiveGasTelemetry, 30000);
+    return () => clearInterval(gasInterval);
   }, []);
 
   // Trigger general loading simulation on mount to let skeletons shimmer beautifully!
@@ -2686,6 +2754,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
                 setToast={setToast}
                 setNotifications={setNotifications}
                 setWalletUSDCBalance={setWalletUSDCBalance}
+                gasTelemetry={gasTelemetry}
 
                 prefilledBridgeInvoice={prefilledBridgeInvoice}
                 setPrefilledBridgeInvoice={setPrefilledBridgeInvoice}
@@ -3019,6 +3088,31 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   </span>
                 </div>
               </div>
+
+              {/* Box 3: Actual Gas Fee Telemetry */}
+              {(() => {
+                const gasUsed = 85000;
+                const ethFee = (gasUsed * gasTelemetry.gasPriceGwei) / 1000000000;
+                const usdFee = ethFee * gasTelemetry.ethPriceUsd;
+                const phpFee = usdFee * exchangeRate;
+                return (
+                  <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between animate-fadeIn">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">L2 Network Gas Fee (Morph Rollup)</span>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-gold-metallic shrink-0 animate-pulse" />
+                        <span className="font-mono text-white/90">~{ethFee.toFixed(6)} ETH</span>
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Estimated Cost</span>
+                      <span className="text-xs font-bold text-white/50 block mt-1 font-mono">
+                        ₱{phpFee.toFixed(2)} PHP (${usdFee.toFixed(3)} USD)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Step loader or details */}
@@ -3284,6 +3378,31 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   </span>
                 </div>
               </div>
+
+              {/* Box 3: Actual Gas Fee Telemetry */}
+              {(() => {
+                const gasUsed = 180000;
+                const ethFee = (gasUsed * gasTelemetry.gasPriceGwei) / 1000000000;
+                const usdFee = ethFee * gasTelemetry.ethPriceUsd;
+                const phpFee = usdFee * exchangeRate;
+                return (
+                  <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between animate-fadeIn">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">L2 Network Gas Fee (Morph Rollup)</span>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-gold-metallic shrink-0 animate-pulse" />
+                        <span className="font-mono text-white/90">~{ethFee.toFixed(6)} ETH</span>
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Estimated Cost</span>
+                      <span className="text-xs font-bold text-white/50 block mt-1 font-mono">
+                        ₱{phpFee.toFixed(2)} PHP (${usdFee.toFixed(3)} USD)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="p-4 rounded-xl border border-[#D4AF37]/10 bg-[#D4AF37]/5 flex gap-2.5 items-start mb-6">
@@ -3376,6 +3495,31 @@ export default function DashboardLayout({ setView, handleLogout }) {
                   </span>
                 </div>
               </div>
+
+              {/* Box 3: Actual Gas Fee Telemetry */}
+              {(() => {
+                const gasUsed = 120000;
+                const ethFee = (gasUsed * gasTelemetry.gasPriceGwei) / 1000000000;
+                const usdFee = ethFee * gasTelemetry.ethPriceUsd;
+                const phpFee = usdFee * exchangeRate;
+                return (
+                  <div className="p-4 rounded-xl border border-white/5 bg-[#0a0a0c] flex items-center justify-between animate-fadeIn">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">L2 Network Gas Fee (Morph Rollup)</span>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-gold-metallic shrink-0 animate-pulse" />
+                        <span className="font-mono text-white/90">~{ethFee.toFixed(6)} ETH</span>
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] uppercase tracking-wider text-[#6a6a6a] block">Estimated Cost</span>
+                      <span className="text-xs font-bold text-white/50 block mt-1 font-mono">
+                        ₱{phpFee.toFixed(2)} PHP (${usdFee.toFixed(3)} USD)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Verification Badge */}
               <div className="p-4 rounded-xl border border-[#D4AF37]/15 bg-[#D4AF37]/5 text-left">
