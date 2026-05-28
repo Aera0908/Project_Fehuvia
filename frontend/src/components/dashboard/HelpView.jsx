@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle, ChevronDown, BookOpen, MessageSquare, ShieldCheck, Cpu, HardDrive, Check } from 'lucide-react';
 
-export function HelpView({ onStartTour }) {
+export function HelpView({ onStartTour, setToast }) {
   const [activeFaq, setActiveFaq] = useState(null);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketCategory, setTicketCategory] = useState('general');
   const [ticketMessage, setTicketMessage] = useState('');
   const [ticketSent, setTicketSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Real-time block height mock
   const [blockHeight, setBlockHeight] = useState(14829381);
@@ -36,17 +37,59 @@ export function HelpView({ onStartTour }) {
     }
   ];
 
-  const handleSupportSubmit = (e) => {
+  const handleSupportSubmit = async (e) => {
     e.preventDefault();
     if (!ticketSubject.trim() || !ticketMessage.trim()) return;
     
-    // Trigger successful mock submission
-    setTicketSent(true);
-    setTimeout(() => {
-      setTicketSent(false);
-      setTicketSubject('');
-      setTicketMessage('');
-    }, 5000);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('https://formsubmit.co/ajax/ynte0130@gmail.com', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          category: ticketCategory,
+          subject: ticketSubject,
+          message: ticketMessage,
+          _subject: `Fehuvia Support Ticket: [${ticketCategory.toUpperCase()}] ${ticketSubject}`
+        })
+      });
+
+      if (!response.ok) throw new Error('Ticket submission failed');
+      
+      setIsSubmitting(false);
+      setTicketSent(true);
+
+      if (setToast) {
+        setToast({
+          show: true,
+          type: 'success',
+          message: `Support ticket lodged successfully! Subject: ${ticketSubject}`,
+          txHash: 'Ticket Sent'
+        });
+      }
+
+      setTimeout(() => {
+        setTicketSent(false);
+        setTicketSubject('');
+        setTicketMessage('');
+      }, 5000);
+    } catch (err) {
+      console.error('Support ticket error:', err);
+      setIsSubmitting(false);
+      if (setToast) {
+        setToast({
+          show: true,
+          type: 'error',
+          message: 'Failed to submit support ticket. Please check your connection and try again.',
+          txHash: 'Ticket Error'
+        });
+      } else {
+        alert('Failed to submit support ticket. Please check your connection and try again.');
+      }
+    }
   };
 
   return (
@@ -277,13 +320,14 @@ export function HelpView({ onStartTour }) {
 
               <button
                 type="submit"
-                className="w-full py-2.5 text-xs font-bold text-center text-[#0a0a0a] rounded-lg transition-all hover:scale-[1.01] hover:shadow-[0_4px_12px_rgba(212,175,55,0.25)] cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full py-2.5 text-xs font-bold text-center text-[#0a0a0a] rounded-lg transition-all hover:scale-[1.01] hover:shadow-[0_4px_12px_rgba(212,175,55,0.25)] cursor-pointer disabled:opacity-50"
                 style={{
                   background: 'linear-gradient(135deg, #fcf6ba 0%, #D4AF37 50%, #B8860B 100%)',
                   boxShadow: '0 2px 8px rgba(212, 175, 55, 0.2)'
                 }}
               >
-                Submit Ticket
+                {isSubmitting ? 'Encrypting & Dispatching...' : 'Submit Ticket'}
               </button>
             </form>
           </div>

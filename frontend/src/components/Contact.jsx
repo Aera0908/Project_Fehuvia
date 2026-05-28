@@ -11,15 +11,34 @@ export default function Contact() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate premium encrypted secure transmission delay
-    setTimeout(() => {
+    try {
+      const response = await fetch('https://formsubmit.co/ajax/ynte0130@gmail.com', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          _subject: `Fehuvia Contact Form: [${formData.subject}] from ${formData.name}`
+        })
+      });
+
+      if (!response.ok) throw new Error('Transmission request failed');
       setIsSubmitting(false);
       setIsSubmitted(true);
-    }, 1500);
+    } catch (err) {
+      console.error('Contact submit error:', err);
+      setIsSubmitting(false);
+      alert('Your inquiry secure transmission encountered an error. Please try again.');
+    }
   };
 
   return (

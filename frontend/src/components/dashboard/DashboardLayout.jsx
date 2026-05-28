@@ -16,7 +16,7 @@ import { TransactionsView } from './TransactionsView';
 import DemoDisclaimer from '../DemoDisclaimer';
 import BrankasLinkModal from '../BrankasLinkModal';
 import { BankLogo } from '../BankLogo';
-import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck, Calendar, Layers, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, User, HelpCircle, FileText, TrendingUp, Clock, X, Check, ShieldAlert, Sparkles, CreditCard, Wallet, ArrowRight, Landmark, ShieldCheck, Calendar, Layers, CheckCircle2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { getFriendlyError, getErrorBadge } from '../../utils/errorMessages';
 
 export default function DashboardLayout({ setView, handleLogout }) {
@@ -1984,27 +1984,57 @@ export default function DashboardLayout({ setView, handleLogout }) {
         
         {/* Dynamic Translucent Morph Toast alert */}
         {toast.show && (() => {
-          const isError = toast.type === 'error' || 
-                          toast.txHash?.toLowerCase().includes('failed') || 
-                          toast.txHash?.toLowerCase().includes('error') || 
-                          toast.message?.toLowerCase().includes('could not') ||
-                          toast.message?.toLowerCase().includes('fail') ||
-                          toast.message?.toLowerCase().includes('reject');
+          const type = toast.type || (
+            (toast.txHash?.toLowerCase().includes('failed') || 
+             toast.txHash?.toLowerCase().includes('error') || 
+             toast.message?.toLowerCase().includes('could not') ||
+             toast.message?.toLowerCase().includes('fail') ||
+             toast.message?.toLowerCase().includes('reject')) ? 'error' : 'success'
+          );
           
-          const title = toast.title || (isError ? 'Transaction Failed' : 'Morph Transaction Cleared');
-          const borderClass = isError ? 'border-red-500/35' : 'border-emerald-500/35';
-          const iconBgClass = isError ? 'bg-red-500/10 border border-red-500/30' : 'bg-emerald-500/10 border border-emerald-500/30';
-          const iconColorClass = isError ? 'text-red-400' : 'text-emerald-400';
-          const badgeClass = isError ? 'text-red-400 bg-red-950/20 border border-red-500/20' : 'text-emerald-400 bg-emerald-950/20 border border-emerald-500/20';
+          let title = toast.title || 'Notification';
+          let borderClass = 'border-emerald-500/35';
+          let iconBgClass = 'bg-emerald-500/10 border border-emerald-500/30';
+          let iconColorClass = 'text-emerald-400';
+          let badgeClass = 'text-emerald-400 bg-emerald-950/20 border border-emerald-500/20';
+          let IconComponent = Check;
+
+          if (type === 'error') {
+            title = toast.title || 'Transaction Failed';
+            borderClass = 'border-red-500/35';
+            iconBgClass = 'bg-red-500/10 border border-red-500/30';
+            iconColorClass = 'text-red-400';
+            badgeClass = 'text-red-400 bg-red-950/20 border border-red-500/20';
+            IconComponent = X;
+          } else if (type === 'warning') {
+            title = toast.title || 'Warning Alert';
+            borderClass = 'border-amber-500/35';
+            iconBgClass = 'bg-amber-500/10 border border-amber-500/30';
+            iconColorClass = 'text-amber-400';
+            badgeClass = 'text-amber-400 bg-amber-950/20 border border-amber-500/20';
+            IconComponent = ShieldAlert;
+          } else if (type === 'info') {
+            title = toast.title || 'System Information';
+            borderClass = 'border-sky-500/35';
+            iconBgClass = 'bg-sky-500/10 border border-sky-500/30';
+            iconColorClass = 'text-sky-400';
+            badgeClass = 'text-sky-400 bg-sky-950/20 border border-sky-500/20';
+            IconComponent = Info;
+          } else if (type === 'disabled') {
+            title = toast.title || 'Feature Locked';
+            borderClass = 'border-zinc-500/35';
+            iconBgClass = 'bg-zinc-500/10 border border-zinc-500/30';
+            iconColorClass = 'text-zinc-400';
+            badgeClass = 'text-zinc-400 bg-zinc-950/20 border border-zinc-500/20';
+            IconComponent = ShieldAlert;
+          } else {
+            title = toast.title || 'Morph Transaction Cleared';
+          }
 
           return (
             <div className={`fixed bottom-6 right-6 z-50 p-4 w-96 rounded-xl border ${borderClass} bg-[#0d0d0f]/90 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-[fadeIn_0.3s_ease-out] flex gap-3.5 items-start`}>
               <div className={`h-8 w-8 shrink-0 rounded-full ${iconBgClass} flex items-center justify-center`}>
-                {isError ? (
-                  <X className={`w-4 h-4 ${iconColorClass}`} />
-                ) : (
-                  <Check className={`w-4 h-4 ${iconColorClass}`} />
-                )}
+                <IconComponent className={`w-4 h-4 ${iconColorClass}`} />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-bold text-white uppercase tracking-wider">{title}</p>
@@ -2793,9 +2823,11 @@ export default function DashboardLayout({ setView, handleLogout }) {
 
           {currentPage === 'Help' && (
             <HelpView 
+              setToast={setToast}
               onStartTour={() => { 
                 setToast({
                   show: true,
+                  type: 'disabled',
                   message: 'The interactive workstation tour is temporarily disabled.',
                   txHash: 'Tour Disabled'
                 });
