@@ -174,30 +174,25 @@ export default function DashboardLayout({ setView, handleLogout }) {
         console.warn('Failed to fetch live ETH price, using fallback:', e);
       }
 
-      // 2. Fetch live gas price from Morph RPC using ethers
+      // 2. Fetch live gas price from Morph RPC using direct eth_gasPrice call
+      //    (avoids eth_maxPriorityFeePerGas which Morph L2 / Hardhat don't support)
       try {
         if (window.ethereum) {
           const tempProvider = new ethers.BrowserProvider(window.ethereum);
-          const feeData = await tempProvider.getFeeData();
-          if (feeData && feeData.gasPrice) {
-            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
-          }
+          const gasPriceHex = await tempProvider.send('eth_gasPrice', []);
+          liveGasPriceGwei = Number(ethers.formatUnits(gasPriceHex, 'gwei'));
         } else {
           const rpcUrl = "https://rpc-hoodi.morph.network";
           const tempProvider = new ethers.JsonRpcProvider(rpcUrl);
-          const feeData = await tempProvider.getFeeData();
-          if (feeData && feeData.gasPrice) {
-            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
-          }
+          const gasPriceHex = await tempProvider.send('eth_gasPrice', []);
+          liveGasPriceGwei = Number(ethers.formatUnits(gasPriceHex, 'gwei'));
         }
       } catch (err) {
         try {
           const rpcUrl = "https://rpc-hoodi.morph.network";
           const tempProvider = new ethers.JsonRpcProvider(rpcUrl);
-          const feeData = await tempProvider.getFeeData();
-          if (feeData && feeData.gasPrice) {
-            liveGasPriceGwei = Number(ethers.formatUnits(feeData.gasPrice, 'gwei'));
-          }
+          const gasPriceHex = await tempProvider.send('eth_gasPrice', []);
+          liveGasPriceGwei = Number(ethers.formatUnits(gasPriceHex, 'gwei'));
         } catch (rpcErr) {
           console.warn('Failed to fetch gas price via RPC, using fallback:', rpcErr);
         }
@@ -213,6 +208,7 @@ export default function DashboardLayout({ setView, handleLogout }) {
       setGasTelemetry(prev => ({ ...prev, loading: false }));
     }
   };
+
 
   // User Profile
   const [userProfile, setUserProfile] = useState(() => {
