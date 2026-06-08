@@ -1,5 +1,8 @@
 # Fehuvia Open Finance Workstation
 
+> [!IMPORTANT]
+> Keynote: This project is a demo prototype only and is not applicable for actual use. All blockchain elements, banking connections, and transaction records are mock simulators or deployed purely on testnet environments for demonstration purposes.
+
 Fehuvia is a Web3 financial co-pilot and SME payment portal designed to give small businesses in Southeast Asia and the Philippines the premium treasury tools typically reserved for large enterprises. By combining AI-driven predictive cashflow forecasting with near-instant stablecoin settlements on the Morph Layer 2 network, Fehuvia transforms reactive accounting into proactive, borderless treasury and wealth management.
 
 This repository contains the complete codebase for the Fehuvia Workstation, including the frontend React application, the Node.js/Express backend API, blockchain event listener daemon, and Solidity smart contracts.
